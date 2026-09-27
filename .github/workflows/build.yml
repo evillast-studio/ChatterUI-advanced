@@ -219,7 +219,8 @@ jobs:
             -x lint \
             -x test \
             -Pandroid.enableJetifier=false \
-            -Pandroid.useAndroidX=true
+            -Pandroid.useAndroidX=true \
+            -Pandroid.abiFilters=arm64-v8a
 
       # ── 15. STATS DE CCACHE ─────────────────────────────────────────────────
       - name: ccache stats
