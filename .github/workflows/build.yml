@@ -27,6 +27,8 @@ jobs:
       NPM_CONFIG_UPDATE_NOTIFIER: false
       RCT_NO_LAUNCH_PACKAGER: 1
       CCACHE_DIR: ~/.ccache
+      # Variables de entorno globales para forzar ARM64 en React Native
+      REACT_NATIVE_ARCHS: arm64-v8a
 
     steps:
 
@@ -71,21 +73,22 @@ jobs:
           echo "Swap activo:"
           swapon --show
 
-      # ── 3. HERRAMIENTAS DEL SISTEMA ─────────────────────────────────────────
+      # ── 3. HERRAMIENTAS DEL SISTEMA Y JAVA ──────────────────────────────────
+      - name: Setup Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Install system dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            openjdk-17-jdk-headless \
             ninja-build \
             cmake \
             ccache \
             unzip \
             curl
-          sudo update-alternatives --set java \
-            /usr/lib/jvm/java-17-openjdk-amd64/bin/java
-          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
-          echo "/usr/lib/jvm/java-17-openjdk-amd64/bin" >> $GITHUB_PATH
 
       # ── 4. ANDROID SDK / NDK ────────────────────────────────────────────────
       - name: Install Android NDK and build tools
@@ -161,16 +164,9 @@ jobs:
             --ignore-scripts=false \
             --loglevel=error
 
-      # ── 10. CACHÉ DE GRADLE ─────────────────────────────────────────────────
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('ChatterUI/android/**/*.gradle*', 'ChatterUI/android/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: |
-            gradle-${{ runner.os }}-
+      # ── 10. CACHÉ DE GRADLE CON SETUP-GRADLE ────────────────────────────────
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       # ── 11. EXPO PREBUILD ───────────────────────────────────────────────────
       - name: Expo prebuild (Android)
@@ -180,9 +176,16 @@ jobs:
         env:
           APP_VARIANT: production
 
+      # ── 11b. FORZAR ARQUITECTURA EXCLUSIVA ARM64-V8A ─────────────────────────
+      - name: Force ARM64 architecture in gradle.properties
+        working-directory: ChatterUI/android
+        run: |
+          echo "" >> gradle.properties
+          echo "# Force ARM64-v8a execution" >> gradle.properties
+          echo "reactNativeArchitectures=arm64-v8a" >> gradle.properties
+          echo "android.injected.build.abi=arm64-v8a" >> gradle.properties
+
       # ── 12. CODEGEN (New Architecture) ──────────────────────────────────────
-      # Genera los directorios JNI que CMake necesita para los módulos nativos.
-      # Sin este paso el build falla con "not an existing directory" en Android-autolinking.cmake.
       - name: Run React Native codegen
         working-directory: ChatterUI/android
         run: |
@@ -191,7 +194,9 @@ jobs:
             --parallel \
             --configure-on-demand \
             -Pandroid.useAndroidX=true \
-            -Pandroid.enableJetifier=false
+            -Pandroid.enableJetifier=false \
+            -PreactNativeArchitectures=arm64-v8a \
+            -Pandroid.abiFilters=arm64-v8a
 
       # ── 13. LIBERAR RAM ─────────────────────────────────────────────────────
       - name: Free RAM before native build
@@ -220,6 +225,7 @@ jobs:
             -x test \
             -Pandroid.enableJetifier=false \
             -Pandroid.useAndroidX=true \
+            -PreactNativeArchitectures=arm64-v8a \
             -Pandroid.abiFilters=arm64-v8a
 
       # ── 15. STATS DE CCACHE ─────────────────────────────────────────────────
