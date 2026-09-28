@@ -220,8 +220,7 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p /tmp/apk-output
-          # Buscar en todas las rutas posibles
-          find $GITHUB_WORKSPACE/ChatterUI -name "*.apk" -not -path "*/intermediates/*" \
+          find $GITHUB_WORKSPACE/ChatterUI -name "*.apk" -type f \
             -exec cp {} /tmp/apk-output/ \; 2>/dev/null || true
           echo "=== APKs recolectados ==="
           ls -lh /tmp/apk-output/ || echo "No se encontraron APKs"
