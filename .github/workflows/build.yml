@@ -27,7 +27,6 @@ jobs:
       NPM_CONFIG_UPDATE_NOTIFIER: false
       RCT_NO_LAUNCH_PACKAGER: 1
       CCACHE_DIR: ~/.ccache
-      # Variables de entorno globales para forzar ARM64 en React Native
       REACT_NATIVE_ARCHS: arm64-v8a
 
     steps:
@@ -35,8 +34,6 @@ jobs:
       # ── 1. LIBERAR ESPACIO ──────────────────────────────────────────────────
       - name: Free disk space
         run: |
-          echo "=== Espacio antes ==="
-          df -h /
           sudo rm -rf \
             /usr/share/dotnet \
             /usr/share/swift \
@@ -57,7 +54,6 @@ jobs:
             "$AGENT_TOOLSDIRECTORY" 2>/dev/null || true
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/*
-          echo "=== Espacio después ==="
           df -h /
 
       # ── 2. SWAP ─────────────────────────────────────────────────────────────
@@ -70,10 +66,8 @@ jobs:
           sudo mkswap /swapfile
           sudo swapon /swapfile
           sudo sysctl vm.swappiness=10
-          echo "Swap activo:"
-          swapon --show
 
-      # ── 3. HERRAMIENTAS DEL SISTEMA Y JAVA ──────────────────────────────────
+      # ── 3. JAVA ──────────────────────────────────────────────────────────────
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
@@ -84,11 +78,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            ninja-build \
-            cmake \
-            ccache \
-            unzip \
-            curl
+            ninja-build cmake ccache unzip curl
 
       # ── 4. ANDROID SDK / NDK ────────────────────────────────────────────────
       - name: Install Android NDK and build tools
@@ -97,8 +87,6 @@ jobs:
           if [ -z "$SDKMANAGER" ]; then
             SDKMANAGER=$(find /usr/local/lib/android/sdk/cmdline-tools -name "sdkmanager" -type f 2>/dev/null | head -1)
           fi
-          echo "sdkmanager encontrado en: $SDKMANAGER"
-          export PATH="$(dirname $SDKMANAGER):$PATH"
           yes | $SDKMANAGER --licenses > /dev/null 2>&1 || true
           $SDKMANAGER --install \
             "ndk;27.2.12479018" \
@@ -142,7 +130,7 @@ jobs:
         with:
           path: ChatterUI
 
-      # ── 8. CACHÉ DE node_modules ────────────────────────────────────────────
+      # ── 8. CACHÉ node_modules ────────────────────────────────────────────────
       - name: Cache node_modules
         uses: actions/cache@v4
         id: npm-cache
@@ -164,35 +152,31 @@ jobs:
             --ignore-scripts=false \
             --loglevel=error
 
-      # ── 10. CACHÉ DE GRADLE CON SETUP-GRADLE ────────────────────────────────
+      # ── 10. GRADLE ──────────────────────────────────────────────────────────
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
       # ── 11. EXPO PREBUILD ───────────────────────────────────────────────────
       - name: Expo prebuild (Android)
         working-directory: ChatterUI
-        run: |
-          npx expo prebuild --platform android --clean --non-interactive
+        run: npx expo prebuild --platform android --clean --non-interactive
         env:
           APP_VARIANT: production
 
-      # ── 11b. FORZAR ARQUITECTURA EXCLUSIVA ARM64-V8A ─────────────────────────
+      # ── 11b. FORZAR ARM64 ────────────────────────────────────────────────────
       - name: Force ARM64 architecture in gradle.properties
         working-directory: ChatterUI/android
         run: |
           echo "" >> gradle.properties
-          echo "# Force ARM64-v8a execution" >> gradle.properties
           echo "reactNativeArchitectures=arm64-v8a" >> gradle.properties
           echo "android.injected.build.abi=arm64-v8a" >> gradle.properties
 
-      # ── 12. CODEGEN (New Architecture) ──────────────────────────────────────
+      # ── 12. CODEGEN ─────────────────────────────────────────────────────────
       - name: Run React Native codegen
         working-directory: ChatterUI/android
         run: |
           ./gradlew generateCodegenArtifactsFromSchema \
-            --no-daemon \
-            --parallel \
-            --configure-on-demand \
+            --no-daemon --parallel --configure-on-demand \
             -Pandroid.useAndroidX=true \
             -Pandroid.enableJetifier=false \
             -PreactNativeArchitectures=arm64-v8a \
@@ -201,11 +185,8 @@ jobs:
       # ── 13. LIBERAR RAM ─────────────────────────────────────────────────────
       - name: Free RAM before native build
         run: |
-          echo "=== RAM antes ==="
-          free -h
           sudo sync
           echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
-          echo "=== RAM después ==="
           free -h
 
       # ── 14. BUILD APK ───────────────────────────────────────────────────────
@@ -215,28 +196,46 @@ jobs:
           export CC="ccache clang"
           export CXX="ccache clang++"
           export CCACHE_CPP2=yes
-
           ./gradlew assembleRelease \
-            --no-daemon \
-            --parallel \
-            --configure-on-demand \
+            --no-daemon --parallel --configure-on-demand \
             --stacktrace \
-            -x lint \
-            -x test \
+            -x lint -x test \
             -Pandroid.enableJetifier=false \
             -Pandroid.useAndroidX=true \
             -PreactNativeArchitectures=arm64-v8a \
             -Pandroid.abiFilters=arm64-v8a
 
-      # ── 15. STATS DE CCACHE ─────────────────────────────────────────────────
+      # ── 15. ENCONTRAR APK ───────────────────────────────────────────────────
+      - name: Find APK location
+        if: always()
+        working-directory: ChatterUI
+        run: |
+          echo "=== Buscando APKs en todo el proyecto ==="
+          find . -name "*.apk" -type f 2>/dev/null || echo "Ningún APK encontrado"
+          echo ""
+          echo "=== Estructura de build outputs ==="
+          find android/app/build/outputs -type f 2>/dev/null || echo "Carpeta outputs no existe"
+
+      # ── 16. COPIAR APK A RUTA CONOCIDA ─────────────────────────────────────
+      - name: Collect APK
+        run: |
+          mkdir -p /tmp/apk-output
+          # Buscar en todas las rutas posibles
+          find $GITHUB_WORKSPACE/ChatterUI -name "*.apk" -not -path "*/intermediates/*" \
+            -exec cp {} /tmp/apk-output/ \; 2>/dev/null || true
+          echo "=== APKs recolectados ==="
+          ls -lh /tmp/apk-output/ || echo "No se encontraron APKs"
+
+      # ── 17. CCACHE STATS ────────────────────────────────────────────────────
       - name: ccache stats
         if: always()
         run: command -v ccache && ccache --show-stats || echo "ccache no disponible"
 
-      # ── 16. SUBIR APK ───────────────────────────────────────────────────────
+      # ── 18. SUBIR APK ───────────────────────────────────────────────────────
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ChatterUI-advanced-${{ github.ref_name }}-${{ github.run_number }}
-          path: ChatterUI/android/app/build/outputs/apk/release/*.apk
+          path: /tmp/apk-output/*.apk
+          if-no-files-found: error
           retention-days: 14
