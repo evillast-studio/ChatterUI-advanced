@@ -1,7 +1,7 @@
 import { useFocusEffect } from 'expo-router'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, Platform, View } from 'react-native'
+import { BackHandler, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useMMKVBoolean, useMMKVNumber } from 'react-native-mmkv'
 import Animated, { Easing, SlideInRight, SlideOutRight } from 'react-native-reanimated'
 import { useShallow } from 'zustand/react/shallow'
@@ -17,6 +17,7 @@ import { Llama } from '@lib/engine/Local/LlamaLocal'
 import { KV } from '@lib/engine/Local/Model'
 import useBackendDevices from '@lib/hooks/BackendDevices'
 import { Logger } from '@lib/state/Logger'
+import { Theme } from '@lib/theme/ThemeManager'
 import { readableFileSize } from '@lib/utils/File'
 
 type ModelSettingsProp = {
@@ -37,12 +38,19 @@ const deviceLabels: Record<string, string> = {
 
 const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoading, exit }) => {
     const { t } = useTranslation()
-    const { config, setConfig } = Llama.useLlamaPreferencesStore(
-        useShallow((state) => ({
-            config: state.config,
-            setConfig: state.setConfiguration,
-        }))
-    )
+    const { color, spacing, borderRadius, fontSize } = Theme.useTheme()
+    const { config, setConfig, profiles, saveProfile, loadProfile, deleteProfile, renameProfile } =
+        Llama.useLlamaPreferencesStore(
+            useShallow((state) => ({
+                config: state.config,
+                setConfig: state.setConfiguration,
+                profiles: state.profiles,
+                saveProfile: state.saveProfile,
+                loadProfile: state.loadProfile,
+                deleteProfile: state.deleteProfile,
+                renameProfile: state.renameProfile,
+            }))
+        )
 
     const devices = useBackendDevices()
 
@@ -54,6 +62,9 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
     const [threadCount] = useMMKVNumber(Global.CPUThreads)
 
     const [kvSize, setKVSize] = useState(0)
+    const [newProfileName, setNewProfileName] = useState('')
+    const [renamingProfile, setRenamingProfile] = useState<string | null>(null)
+    const [renameValue, setRenameValue] = useState('')
 
     useEffect(() => {
         KV.getKVSize().then(setKVSize)
@@ -93,6 +104,47 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
         })
     }
 
+    const handleSaveProfile = () => {
+        const name = newProfileName.trim()
+        if (!name) return
+        if (profiles[name]) {
+            Alert.alert({
+                title: 'Sobreescribir perfil',
+                description: `¿Sobreescribir el perfil "${name}"?`,
+                buttons: [
+                    { label: 'Cancelar' },
+                    {
+                        label: 'Sobreescribir',
+                        onPress: () => {
+                            saveProfile(name)
+                            setNewProfileName('')
+                        },
+                        type: 'warning',
+                    },
+                ],
+            })
+        } else {
+            saveProfile(name)
+            setNewProfileName('')
+        }
+    }
+
+    const handleDeleteProfile = (name: string) => {
+        Alert.alert({
+            title: 'Eliminar perfil',
+            description: `¿Eliminar el perfil "${name}"?`,
+            buttons: [
+                { label: 'Cancelar' },
+                {
+                    label: 'Eliminar',
+                    onPress: () => deleteProfile(name),
+                    type: 'warning',
+                },
+            ],
+        })
+    }
+
+    const profileNames = Object.keys(profiles)
     const disabled = modelImporting || modelLoading
 
     return (
@@ -101,6 +153,117 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
             style={{ flex: 1 }}
             entering={SlideInRight.easing(Easing.inOut(Easing.cubic))}
             exiting={SlideOutRight.easing(Easing.inOut(Easing.cubic))}>
+
+            {/* ── Perfiles ── */}
+            <SectionTitle>Perfiles de Configuración</SectionTitle>
+            <View style={{ marginTop: 8, gap: spacing.m }}>
+                {/* Guardar perfil nuevo */}
+                <View style={{ flexDirection: 'row', gap: spacing.m, alignItems: 'center' }}>
+                    <TextInput
+                        value={newProfileName}
+                        onChangeText={setNewProfileName}
+                        placeholder="Nombre del perfil..."
+                        placeholderTextColor={color.text._600}
+                        style={{
+                            flex: 1,
+                            color: color.text._100,
+                            backgroundColor: color.neutral._200,
+                            borderRadius: borderRadius.m,
+                            paddingHorizontal: spacing.l,
+                            paddingVertical: spacing.sm,
+                            fontSize: fontSize.m,
+                            borderWidth: 1,
+                            borderColor: color.neutral._300,
+                        }}
+                    />
+                    <ThemedButton
+                        label="Guardar"
+                        onPress={handleSaveProfile}
+                        variant={newProfileName.trim() ? 'primary' : 'disabled'}
+                        buttonStyle={{ paddingHorizontal: spacing.l }}
+                    />
+                </View>
+
+                {/* Lista de perfiles guardados */}
+                {profileNames.length === 0 && (
+                    <Text style={{ color: color.text._500, fontSize: fontSize.s, marginLeft: 4 }}>
+                        No hay perfiles guardados.
+                    </Text>
+                )}
+                {profileNames.map((name) => (
+                    <View
+                        key={name}
+                        style={{
+                            backgroundColor: color.neutral._200,
+                            borderRadius: borderRadius.m,
+                            borderWidth: 1,
+                            borderColor: color.neutral._300,
+                            overflow: 'hidden',
+                        }}>
+                        {renamingProfile === name ? (
+                            <View style={{ flexDirection: 'row', gap: spacing.m, padding: spacing.m, alignItems: 'center' }}>
+                                <TextInput
+                                    value={renameValue}
+                                    onChangeText={setRenameValue}
+                                    autoFocus
+                                    style={{
+                                        flex: 1,
+                                        color: color.text._100,
+                                        backgroundColor: color.neutral._300,
+                                        borderRadius: borderRadius.s,
+                                        paddingHorizontal: spacing.m,
+                                        paddingVertical: spacing.sm,
+                                        fontSize: fontSize.m,
+                                    }}
+                                />
+                                <ThemedButton
+                                    label="OK"
+                                    onPress={() => {
+                                        const n = renameValue.trim()
+                                        if (n && n !== name) renameProfile(name, n)
+                                        setRenamingProfile(null)
+                                    }}
+                                    variant="primary"
+                                    buttonStyle={{ paddingHorizontal: spacing.m }}
+                                />
+                                <ThemedButton
+                                    label="✕"
+                                    onPress={() => setRenamingProfile(null)}
+                                    variant="secondary"
+                                    buttonStyle={{ paddingHorizontal: spacing.m }}
+                                />
+                            </View>
+                        ) : (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.m, gap: spacing.m }}>
+                                <Text style={{ flex: 1, color: color.text._100, fontSize: fontSize.m, fontWeight: '600' }}>
+                                    {name}
+                                </Text>
+                                <ThemedButton
+                                    label="Cargar"
+                                    onPress={() => loadProfile(name)}
+                                    variant="secondary"
+                                    buttonStyle={{ paddingHorizontal: spacing.m }}
+                                />
+                                <ThemedButton
+                                    label="✎"
+                                    onPress={() => {
+                                        setRenamingProfile(name)
+                                        setRenameValue(name)
+                                    }}
+                                    variant="secondary"
+                                    buttonStyle={{ paddingHorizontal: spacing.m }}
+                                />
+                                <ThemedButton
+                                    label="✕"
+                                    onPress={() => handleDeleteProfile(name)}
+                                    variant="critical"
+                                    buttonStyle={{ paddingHorizontal: spacing.m }}
+                                />
+                            </View>
+                        )}
+                    </View>
+                ))}
+            </View>
 
             {/* ── CPU Settings ── */}
             <SectionTitle>{t('model.settings.cpu')}</SectionTitle>
@@ -168,32 +331,69 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
                         step={1}
                         disabled={disabled}
                     />
+
+                    {/* Selector de backend GPU — muestra todos los disponibles */}
+                    {devices.length > 0 && (
+                        <>
+                            <HorizontalSelector
+                                style={{ paddingBottom: 8 }}
+                                label="Backend GPU"
+                                values={[
+                                    { label: 'Auto', value: '' },
+                                    ...devices
+                                        .filter((d) => d !== 'CPU')
+                                        .map((item) => ({
+                                            label: deviceLabels[item] ?? item,
+                                            value: item,
+                                        })),
+                                ]}
+                                selected={
+                                    config.devices?.find((d) => d !== 'CPU') ?? ''
+                                }
+                                onPress={(value) => {
+                                    if (value === '') {
+                                        setConfig({ ...config, devices: [] })
+                                    } else {
+                                        // GPU seleccionada + CPU para KV cache (híbrido)
+                                        setConfig({
+                                            ...config,
+                                            devices: config.no_kv_offload ? [value, 'CPU'] : [value],
+                                        })
+                                    }
+                                }}
+                            />
+                            <Text style={{
+                                color: color.text._500,
+                                fontSize: fontSize.s,
+                                marginLeft: 4,
+                                marginBottom: 8,
+                            }}>
+                                {devices.filter(d => d !== 'CPU').join(' · ') || 'Sin GPU detectada'}
+                            </Text>
+                        </>
+                    )}
+
+                    {/* Modo híbrido: GPU matmul + CPU KV cache */}
+                    <ThemedSwitch
+                        label={t('model.nokvoffload')}
+                        value={config.no_kv_offload}
+                        onChangeValue={(value) => {
+                            const gpuDevice = config.devices?.find((d) => d !== 'CPU')
+                            // Al activar híbrido, asegurar que CPU está en devices si hay GPU
+                            const newDevices = value && gpuDevice
+                                ? [gpuDevice, 'CPU']
+                                : gpuDevice
+                                  ? [gpuDevice]
+                                  : config.devices
+                            setConfig({ ...config, no_kv_offload: value, devices: newDevices })
+                        }}
+                        description={t('model.nokvoffloaddesc')}
+                    />
                     <ThemedSwitch
                         label={t('model.forcegpu')}
                         value={config.force_gpu_device}
                         onChangeValue={(value) => setConfig({ ...config, force_gpu_device: value })}
                     />
-                    <ThemedSwitch
-                        label={t('model.nokvoffload')}
-                        value={config.no_kv_offload}
-                        onChangeValue={(value) => setConfig({ ...config, no_kv_offload: value })}
-                        description={t('model.nokvoffloaddesc')}
-                    />
-                    {devices.length > 1 && (
-                        <HorizontalSelector
-                            style={{ paddingBottom: 12 }}
-                            label={t('model.devicepreset')}
-                            values={devices.map((item) => ({
-                                label: deviceLabels[item] ?? item,
-                                value: item,
-                            }))}
-                            selected={config.devices?.[0]}
-                            onPress={(value) => {
-                                const selected = value === 'CPU' ? [value] : [value, 'CPU']
-                                setConfig({ ...config, devices: selected })
-                            }}
-                        />
-                    )}
 
                     {/* ── Math & Precision ── */}
                     <SectionTitle>{t('model.settings.math')}</SectionTitle>
@@ -251,12 +451,15 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
                         step={32}
                         disabled={disabled}
                     />
+                    {/* defrag_thold — rango continuo 0.0 a 1.0 */}
                     <ThemedSlider
                         label={t('model.defragthold')}
                         value={config.defrag_thold}
-                        onValueChange={(value) => setConfig({ ...config, defrag_thold: value })}
-                        min={0.01}
-                        max={1.0}
+                        onValueChange={(value) =>
+                            setConfig({ ...config, defrag_thold: Math.round(value * 100) / 100 })
+                        }
+                        min={0}
+                        max={1}
                         step={0.01}
                         disabled={disabled}
                     />
