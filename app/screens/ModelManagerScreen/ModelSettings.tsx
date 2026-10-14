@@ -109,7 +109,7 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
 
     const handleSaveProfile = () => {
         const name = newProfileName.trim()
-        if (!name) return
+        if (!name || !profiles) return
         if (profiles[name]) {
             Alert.alert({
                 title: 'Sobreescribir perfil',
@@ -147,7 +147,7 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
         })
     }
 
-    const profileNames = Object.keys(profiles)
+    const profileNames = profiles ? Object.keys(profiles) : []
     const disabled = modelImporting || modelLoading
 
     return (
