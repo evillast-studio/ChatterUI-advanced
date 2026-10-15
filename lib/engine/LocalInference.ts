@@ -475,8 +475,9 @@ const obtainFields = async (): Promise<ContextBuilderParams | void> => {
 
         // Compresión automática de historial si está habilitada
         const summarizeEnabled = mmkv.getBoolean(AppSettings.ContextSummarize) ?? false
-        const processedMessages = summarizeEnabled
-            ? await maybeSummarizeContext(messages, engineData.context_length, {
+        const llamaContext = Llama.useLlamaModelStore.getState().context
+        const processedMessages = summarizeEnabled && llamaContext
+            ? await maybeSummarizeContext(messages, engineData.context_length, llamaContext, {
                   ...defaultSummarizerConfig,
                   triggerRatio: (mmkv.getNumber(AppSettings.SummaryTriggerRatio) ?? 75) / 100,
                   recentCount: mmkv.getNumber(AppSettings.SummaryRecentCount) ?? 8,
