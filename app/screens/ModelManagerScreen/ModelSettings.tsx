@@ -13,6 +13,7 @@ import ThemedSwitch from '@components/input/ThemedSwitch'
 import SectionTitle from '@components/text/SectionTitle'
 import Alert from '@components/views/Alert'
 import { AppSettings, Global } from '@lib/constants/GlobalValues'
+import { chatCacheManager } from '@lib/engine/Local/ChatCacheManager'
 import { Llama } from '@lib/engine/Local/LlamaLocal'
 import { KV } from '@lib/engine/Local/Model'
 import useBackendDevices from '@lib/hooks/BackendDevices'
@@ -67,17 +68,45 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
     const [threadCount] = useMMKVNumber(Global.CPUThreads)
 
     const [kvSize, setKVSize] = useState(0)
+    const [chatSessionsSize, setChatSessionsSize] = useState(0)
     const [newProfileName, setNewProfileName] = useState('')
     const [renamingProfile, setRenamingProfile] = useState<string | null>(null)
     const [renameValue, setRenameValue] = useState('')
 
     useEffect(() => {
         KV.getKVSize().then(setKVSize)
+        chatCacheManager.getTotalSize().then(setChatSessionsSize)
     }, [])
 
     const getKVSize = async () => {
         const size = await KV.getKVSize()
         setKVSize(size)
+    }
+
+    const getChatSessionsSize = async () => {
+        const size = await chatCacheManager.getTotalSize()
+        setChatSessionsSize(size)
+    }
+
+    const handleDeleteChatSessions = () => {
+        Alert.alert({
+            title: t('model.alert.deletechatsessions.title'),
+            description: t('model.alert.deletechatsessions.description', {
+                size: readableFileSize(chatSessionsSize),
+            }),
+            buttons: [
+                { label: t('common.actions.cancel') },
+                {
+                    label: t('model.alert.deletechatsessions.title'),
+                    onPress: async () => {
+                        await chatCacheManager.clearAllSessions()
+                        Logger.info(t('model.toast.deletechatsessions'))
+                        getChatSessionsSize()
+                    },
+                    type: 'warning',
+                },
+            ],
+        })
     }
 
     const backAction = () => {
@@ -509,6 +538,12 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
                     variant={kvSize === 0 ? 'disabled' : 'critical'}
                 />
             )}
+            <ThemedButton
+                buttonStyle={{ marginTop: 8 }}
+                label={t('model.purgechatsessions', { size: readableFileSize(chatSessionsSize) })}
+                onPress={handleDeleteChatSessions}
+                variant={chatSessionsSize === 0 ? 'disabled' : 'critical'}
+            />
 
             {/* ── Context Summarizer ── */}
             <SectionTitle>{t('model.settings.summarizer')}</SectionTitle>
