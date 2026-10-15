@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native'
+import { memo, StyleSheet } from 'react-native'
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated'
 
 import { useLiveQueryJoined } from '@lib/hooks/LiveQueryJoined'
@@ -17,7 +17,7 @@ type ChatItemProps = {
 
 type ChatItemBodyProps = ChatItemProps & { entrySwipeIds: number[] }
 
-const ChatItem: React.FC<ChatItemProps> = ({ entryId, ...rest }) => {
+const ChatItem: React.FC<ChatItemProps> = memo(({ entryId, ...rest }) => {
     const { data: swipeidList } = useLiveQueryJoined(
         Chats.db.live.swipeIdList(entryId),
         [entryId],
@@ -31,9 +31,9 @@ const ChatItem: React.FC<ChatItemProps> = ({ entryId, ...rest }) => {
             entrySwipeIds={swipeidList.map((item) => item.id)}
         />
     )
-}
+}) as React.FC<ChatItemProps>
 
-const ChatItemBody: React.FC<ChatItemBodyProps> = ({
+const ChatItemBody: React.FC<ChatItemBodyProps> = memo(({
     index,
     isLastMessage,
     isGreeting,
@@ -84,9 +84,12 @@ const ChatItemBody: React.FC<ChatItemBodyProps> = ({
             </ChatFrame>
         </Animated.View>
     )
-}
+}) as React.FC<ChatItemBodyProps>
 
 export default ChatItem
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+;(ChatItemBody as any).displayName = 'ChatItemBody'
 
 const styles = StyleSheet.create({
     chatItem: {

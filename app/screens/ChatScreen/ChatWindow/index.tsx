@@ -119,6 +119,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, scrollData }) => {
                 keyExtractor={(item) => item.entryId.toString()}
                 renderItem={() => <></>}
                 scrollEventThrottle={16}
+                windowSize={5}
+                maxToRenderPerBatch={4}
+                initialNumToRender={8}
+                removeClippedSubviews={true}
                 onViewableItemsChanged={(item) => {
                     const index = item.viewableItems?.at(0)?.index
 
