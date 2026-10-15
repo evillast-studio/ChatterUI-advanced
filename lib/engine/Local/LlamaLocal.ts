@@ -14,6 +14,7 @@ import { ModelDataType } from '@db/schema'
 import { Storage } from '@lib/enums/Storage'
 import { AppDirectory, fileExists, readableFileSize, writeBase64File } from '@lib/utils/File'
 
+import { chatCacheManager } from './ChatCacheManager'
 import { checkGGMLDeprecated } from './GGML'
 import { KV, Model } from './Model'
 import { AppSettings } from '../../constants/GlobalValues'
@@ -51,6 +52,12 @@ export type LlamaState = {
     unloadMmproj: () => Promise<void>
     saveKV: (prompt: string | undefined, media_paths?: string[]) => Promise<void>
     loadKV: () => Promise<boolean>
+    /** Guarda el KV cache en un archivo por chatId. Independiente de SaveLocalKV. */
+    saveKVForChat: (chatId: number, prompt: string, media_paths?: string[]) => Promise<void>
+    /** Carga el KV cache de un chatId específico. Retorna true si tuvo éxito. */
+    loadKVForChat: (chatId: number) => Promise<boolean>
+    /** Elimina el archivo de cache de un chat específico (tras edición o borrado). */
+    invalidateChatKV: (chatId: number) => Promise<void>
     completion: (
         params: CompletionParams,
         callback: (text: string) => void,
@@ -86,14 +93,25 @@ export type LlamaConfig = {
     no_kv_offload: boolean
 }
 
+export type LlamaProfile = {
+    name: string
+    config: LlamaConfig
+}
+
 export type EngineDataProps = {
     config: LlamaConfig
     lastModel?: ModelDataType
     lastMmproj?: ModelDataType
+    /** Perfiles de configuración guardados por el usuario */
+    profiles: Record<string, LlamaConfig>
     setConfiguration: (config: LlamaConfig) => void
     setLastModelLoaded: (model: ModelDataType | undefined) => void
     setLastMmprojLoaded: (model: ModelDataType | undefined) => void
     maybeClearLastLoaded: (mode: ModelDataType) => void
+    saveProfile: (name: string) => void
+    loadProfile: (name: string) => void
+    deleteProfile: (name: string) => void
+    renameProfile: (oldName: string, newName: string) => void
 }
 
 const sessionFile = `${AppDirectory.SessionPath}llama-session.bin`
@@ -128,8 +146,9 @@ export namespace Llama {
         persist(
             (set, get) => ({
                 config: defaultConfig,
+                profiles: {},
                 setConfiguration: (config: LlamaConfig) => {
-                    set({ config: config })
+                    set({ config })
                 },
                 setLastModelLoaded: (model: ModelDataType | undefined) => {
                     if (get().lastModel?.id === model?.id) return
@@ -145,6 +164,38 @@ export namespace Llama {
                         set({ lastMmproj: undefined })
                     }
                 },
+                saveProfile: (name: string) => {
+                    set((state) => ({
+                        profiles: { ...state.profiles, [name]: { ...state.config } },
+                    }))
+                    Logger.info(`[Profile] Guardado: ${name}`)
+                },
+                loadProfile: (name: string) => {
+                    const profile = get().profiles[name]
+                    if (!profile) {
+                        Logger.warn(`[Profile] No encontrado: ${name}`)
+                        return
+                    }
+                    set({ config: { ...profile } })
+                    Logger.info(`[Profile] Cargado: ${name}`)
+                },
+                deleteProfile: (name: string) => {
+                    set((state) => {
+                        const next = { ...state.profiles }
+                        delete next[name]
+                        return { profiles: next }
+                    })
+                    Logger.info(`[Profile] Eliminado: ${name}`)
+                },
+                renameProfile: (oldName: string, newName: string) => {
+                    set((state) => {
+                        if (!state.profiles[oldName] || newName === oldName) return {}
+                        const next = { ...state.profiles }
+                        next[newName] = next[oldName]
+                        delete next[oldName]
+                        return { profiles: next }
+                    })
+                },
             }),
             {
                 name: Storage.EngineData,
@@ -152,9 +203,10 @@ export namespace Llama {
                     config: state.config,
                     lastModel: state.lastModel,
                     lastMmproj: state.lastMmproj,
+                    profiles: state.profiles,
                 }),
                 storage: createMMKVStorage(),
-                version: 5,
+                version: 6,
                 migrate: (persistedState: any, version) => {
                     if (version === 1) {
                         persistedState.config.ctx_shift = true
@@ -181,6 +233,10 @@ export namespace Llama {
                         persistedState.config.swa_full = false
                         persistedState.config.no_kv_offload = true
                         Logger.info('Migrated to v5 EngineData (math/precision/gpu/context fields)')
+                    }
+                    if (version === 5) {
+                        persistedState.profiles = {}
+                        Logger.info('Migrated to v6 EngineData (profiles)')
                     }
                     return persistedState
                 },
@@ -268,7 +324,7 @@ export namespace Llama {
 
             // updated EngineData
             useLlamaPreferencesStore.getState().setLastModelLoaded(model)
-            KV.useKVStore.getState().setKvCacheLoaded(false)
+            KV.useKVStore.getState().setLoadedChatId(null)
         },
         loadMmproj: async (model: ModelDataType) => {
             const context = get().context
@@ -330,7 +386,8 @@ export namespace Llama {
         completion: async (
             params: CompletionParams,
             callback = (text: string) => {},
-            completed = (text: string) => {}
+            completed = (text: string) => {},
+            chatId?: number
         ) => {
             const llamaContext = get().context
             if (llamaContext === undefined) {
@@ -349,7 +406,11 @@ export namespace Llama {
                     )
                     set({ chatCount: get().chatCount + 1 })
                     if (mmkv.getBoolean(AppSettings.SaveLocalKV)) {
-                        await get().saveKV(params.prompt, params.media_paths ?? [])
+                        if (chatId !== undefined) {
+                            await get().saveKVForChat(chatId, params.prompt ?? '', params.media_paths ?? [])
+                        } else {
+                            await get().saveKV(params.prompt, params.media_paths ?? [])
+                        }
                     }
                 })
         },
@@ -403,6 +464,72 @@ export namespace Llama {
                     Logger.error('Session loaded could not load from KV cache')
                 })
             return result
+        },
+        saveKVForChat: async (chatId, prompt, media_paths = []) => {
+            const llamaContext = get().context
+            if (!llamaContext) return
+
+            const now = performance.now()
+            const sessionPath = chatCacheManager.getSessionPath(chatId)
+
+            // saveSession retorna el número de tokens efectivamente guardados en el .bin.
+            // Con ctx_shift, este número es <= tokens del prompt original (los tokens
+            // desplazados no están). Guardamos exactamente esos tokens para verificación.
+            const savedTokenCount = await llamaContext
+                .saveSession(sessionPath.replace('file://', ''))
+                .catch(() => -1)
+
+            if (savedTokenCount === -1) {
+                Logger.warn(`[KV] saveSession falló para chat ${chatId}`)
+                return
+            }
+
+            // Tokenizamos el prompt completo y tomamos solo los primeros N tokens
+            // que quedaron en el KV — eso es lo que el próximo loadSession restaurará
+            const allTokens = (await get().tokenize(prompt, media_paths))?.tokens ?? []
+            const effectiveTokens = allTokens.slice(0, savedTokenCount)
+
+            KV.useKVStore.getState().setKvCacheTokens(effectiveTokens)
+            KV.useKVStore.getState().setCachedChatId(chatId)
+
+            Logger.info(
+                `[KV] Chat ${chatId} guardado en ${Math.floor(performance.now() - now)}ms` +
+                ` (${savedTokenCount}/${allTokens.length} tokens en KV)`
+            )
+        },
+        loadKVForChat: async (chatId) => {
+            const llamaContext = get().context
+            if (!llamaContext) return false
+
+            const sessionPath = chatCacheManager.getSessionPath(chatId)
+            const exists = await (await import('@vali98/react-native-fs')).default.exists(sessionPath)
+            if (!exists) return false
+
+            const now = performance.now()
+            let ok = false
+            await llamaContext
+                .loadSession(sessionPath.replace('file://', ''))
+                .then(() => {
+                    ok = true
+                    Logger.info(
+                        `[KV] Chat ${chatId} cargado en ${Math.floor(performance.now() - now)}ms`
+                    )
+                })
+                .catch((e) => {
+                    Logger.warn(`[KV] loadSession falló para chat ${chatId}, eliminando cache`, e)
+                    chatCacheManager.deleteChatSession(chatId)
+                })
+            return ok
+        },
+        invalidateChatKV: async (chatId) => {
+            await chatCacheManager.deleteChatSession(chatId)
+            // Si el cache en memoria era de este chat, marcarlo como no cargado
+            if (KV.useKVStore.getState().cachedChatId === chatId) {
+                KV.useKVStore.getState().setLoadedChatId(null)
+                KV.useKVStore.getState().setCachedChatId(null)
+                KV.useKVStore.getState().setKvCacheTokens([])
+            }
+            Logger.info(`[KV] Cache invalidado para chat ${chatId}`)
         },
         tokenLength: async (text: string, mediaPaths: string[] = []) => {
             const finalPaths = get().mmproj ? mediaPaths : []
