@@ -18,17 +18,25 @@ import { Logger } from '@lib/state/Logger'
 
 export class ChatCacheManager {
     private baseDir: string
+    private dirReady: Promise<void>
 
     constructor(baseDir?: string) {
-        this.baseDir = baseDir ?? `${AppDirectory.SessionPath}chat_sessions`
-        this.ensureDirectoryExists()
+        // Usar session/ ya existente como base — no crear subdirectorio nuevo
+        // para evitar el problema de directorio no creado al primer save
+        this.baseDir = baseDir ?? `${AppDirectory.SessionPath}chat_kv`
+        this.dirReady = this.ensureDirectoryExists()
     }
 
     /** Crea el directorio de sesiones si no existe */
     private async ensureDirectoryExists(): Promise<void> {
-        const exists = await RNFS.exists(this.baseDir)
-        if (!exists) {
-            await RNFS.mkdir(this.baseDir)
+        try {
+            const exists = await RNFS.exists(this.baseDir)
+            if (!exists) {
+                await RNFS.mkdir(this.baseDir)
+                Logger.info(`[ChatCacheManager] Directorio creado: ${this.baseDir}`)
+            }
+        } catch (e) {
+            Logger.error(`[ChatCacheManager] No se pudo crear directorio: ${this.baseDir}`, e)
         }
     }
 
@@ -46,6 +54,7 @@ export class ChatCacheManager {
         chatId: number | string
     ): Promise<boolean> {
         if (!context || chatId === undefined || chatId === null) return false
+        await this.dirReady
         const sessionPath = this.getSessionPath(chatId)
         try {
             const tokens = await context.saveSession(sessionPath.replace('file://', ''))
@@ -124,6 +133,18 @@ export class ChatCacheManager {
         try {
             const stat = await RNFS.stat(sessionPath)
             return stat.size ?? 0
+        } catch {
+            return 0
+        }
+    }
+
+    /** Tamaño total en bytes de todos los archivos session_*.bin */
+    async getTotalSize(): Promise<number> {
+        try {
+            const exists = await RNFS.exists(this.baseDir)
+            if (!exists) return 0
+            const files = await RNFS.readDir(this.baseDir)
+            return files.reduce((acc, f) => acc + (f.size ?? 0), 0)
         } catch {
             return 0
         }

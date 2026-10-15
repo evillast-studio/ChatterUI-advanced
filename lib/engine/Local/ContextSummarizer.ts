@@ -2,26 +2,16 @@
  * ContextSummarizer
  *
  * Compresión automática de historial cuando el contexto supera un umbral.
- * Usa el modelo ya cargado en Llama.useLlamaModelStore — sin API externa.
- *
- * Flujo:
- *   1. Estimar tokens del historial (~4 chars = 1 token)
- *   2. Si supera triggerRatio del n_ctx → resumir mensajes intermedios
- *   3. Devolver [firstEntry, summaryEntry, ...recentEntries]
+ * No importa LlamaLocal — recibe el contexto como parámetro para evitar
+ * ciclos de imports con LocalInference.ts.
  */
 
 import { Logger } from '@lib/state/Logger'
 
-import { Llama } from './LlamaLocal'
-
 export type SummarizerConfig = {
-    /** Fracción del contexto en la que se activa (0.0–1.0) */
     triggerRatio: number
-    /** Mensajes recientes a conservar sin comprimir */
     recentCount: number
-    /** Máx tokens del resumen */
     summaryMaxTokens: number
-    /** Temperatura baja para resúmenes factuales */
     summaryTemperature: number
 }
 
@@ -32,19 +22,16 @@ export const defaultSummarizerConfig: SummarizerConfig = {
     summaryTemperature: 0.3,
 }
 
-// Extrae el texto activo de un mensaje
 function getActiveText(entry: any): string {
     const active = entry?.swipes?.find((s: any) => s.active) ?? entry?.swipes?.[0]
     return active?.swipe?.trim() ?? ''
 }
 
-// Estima tokens: 1 token ≈ 4 caracteres
 function estimateTokens(entries: any[]): number {
     const total = entries.reduce((acc, e) => acc + getActiveText(e).length, 0)
     return Math.floor(total / 4)
 }
 
-// Crea una entrada sintética de sistema con el resumen
 function makeSummaryEntry(summary: string): any {
     return {
         id: -2,
@@ -64,12 +51,19 @@ function makeSummaryEntry(summary: string): any {
     }
 }
 
+/**
+ * @param messages      Array de ChatEntry
+ * @param contextLength n_ctx configurado
+ * @param llamaContext  Contexto del modelo ya cargado (LlamaContext de cui-llama.rn)
+ * @param cfg           Configuración del summarizer
+ */
 export async function maybeSummarizeContext(
     messages: any[],
     contextLength: number,
+    llamaContext: any,
     cfg: SummarizerConfig = defaultSummarizerConfig
 ): Promise<any[]> {
-    if (messages.length === 0) return messages
+    if (messages.length === 0 || !llamaContext) return messages
 
     const threshold = Math.floor(contextLength * cfg.triggerRatio)
     const estimated = estimateTokens(messages)
@@ -77,7 +71,7 @@ export async function maybeSummarizeContext(
     if (estimated < threshold) return messages
 
     Logger.info(
-        `[Summarizer] ~${estimated} tokens estimados / umbral ${threshold}. Comprimiendo...`
+        `[Summarizer] ~${estimated} tokens / umbral ${threshold}. Comprimiendo...`
     )
 
     const firstEntry = messages[0]
@@ -100,15 +94,9 @@ export async function maybeSummarizeContext(
         `Incluye personajes, decisiones, información importante y estado actual. ` +
         `Sin comentarios, solo el resumen:\n\n${historyText}`
 
-    const llamaStore = Llama.useLlamaModelStore.getState()
-    if (!llamaStore.context) {
-        Logger.warn('[Summarizer] Sin modelo cargado, omitiendo compresión.')
-        return messages
-    }
-
     let summary = ''
     try {
-        await llamaStore.context.completion(
+        await llamaContext.completion(
             {
                 prompt: summaryPrompt,
                 n_predict: cfg.summaryMaxTokens,
@@ -128,7 +116,7 @@ export async function maybeSummarizeContext(
     if (!summary) return messages
 
     Logger.info(
-        `[Summarizer] OK — ${toCompress.length} mensajes → 1 resumen (${summary.length} chars)`
+        `[Summarizer] OK — ${toCompress.length} msgs → 1 resumen (${summary.length} chars)`
     )
 
     return [firstEntry, makeSummaryEntry(summary), ...recentEntries]
