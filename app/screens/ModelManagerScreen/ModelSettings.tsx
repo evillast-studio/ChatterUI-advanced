@@ -39,18 +39,20 @@ const deviceLabels: Record<string, string> = {
 const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoading, exit }) => {
     const { t } = useTranslation()
     const { color, spacing, borderRadius, fontSize } = Theme.useTheme()
-    const { config, setConfig, profiles, saveProfile, loadProfile, deleteProfile, renameProfile } =
+    const { config, setConfig, profiles } =
         Llama.useLlamaPreferencesStore(
             useShallow((state) => ({
                 config: state.config,
                 setConfig: state.setConfiguration,
                 profiles: state.profiles,
-                saveProfile: state.saveProfile,
-                loadProfile: state.loadProfile,
-                deleteProfile: state.deleteProfile,
-                renameProfile: state.renameProfile,
             }))
         )
+
+    // Funciones fuera del useShallow — no deben causar re-renders
+    const saveProfile = Llama.useLlamaPreferencesStore((state) => state.saveProfile)
+    const loadProfile = Llama.useLlamaPreferencesStore((state) => state.loadProfile)
+    const deleteProfile = Llama.useLlamaPreferencesStore((state) => state.deleteProfile)
+    const renameProfile = Llama.useLlamaPreferencesStore((state) => state.renameProfile)
 
     const devices = useBackendDevices()
 
@@ -454,16 +456,16 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
                         step={32}
                         disabled={disabled}
                     />
-                    {/* defrag_thold — rango continuo 0.0 a 1.0 */}
+                    {/* defrag_thold — se muestra como 0-100 entero, se guarda como 0.01-1.0 */}
                     <ThemedSlider
-                        label={t('model.defragthold')}
-                        value={config.defrag_thold}
+                        label={`${t('model.defragthold')}: ${((config.defrag_thold ?? 0.02) * 100).toFixed(0)}`}
+                        value={Math.round((config.defrag_thold ?? 0.02) * 100)}
                         onValueChange={(value) =>
-                            setConfig({ ...config, defrag_thold: Math.round(value * 100) / 100 })
+                            setConfig({ ...config, defrag_thold: value / 100 })
                         }
-                        min={0}
-                        max={1}
-                        step={0.01}
+                        min={1}
+                        max={100}
+                        step={1}
                         disabled={disabled}
                     />
                 </>
