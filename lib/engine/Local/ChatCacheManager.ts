@@ -21,9 +21,8 @@ export class ChatCacheManager {
     private dirReady: Promise<void>
 
     constructor(baseDir?: string) {
-        // Usar session/ ya existente como base — no crear subdirectorio nuevo
-        // para evitar el problema de directorio no creado al primer save
-        this.baseDir = baseDir ?? `${AppDirectory.SessionPath}chat_kv`
+        // Quitar file:// — RNFS.mkdir y exists no aceptan ese prefijo
+        this.baseDir = (baseDir ?? `${AppDirectory.SessionPath}chat_kv`).replace('file://', '')
         this.dirReady = this.ensureDirectoryExists()
     }
 
