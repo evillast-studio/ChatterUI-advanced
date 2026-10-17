@@ -174,6 +174,13 @@ export namespace Chats {
     export const useChatState = create<ChatState>((set, get: () => ChatState) => ({
         buffer: { data: '' },
         setId: async (chatId) => {
+            // Verificar que el chat existe antes de cargar — evita FOREIGN KEY al reiniciar
+            const exists = await db.query.chatExists(chatId)
+            if (!exists) {
+                Logger.warn(`[Chat] chatId ${chatId} no existe en DB, limpiando estado`)
+                set({ id: undefined })
+                return
+            }
             const data = { ...(await db.query.chatNew(chatId)), autoScroll: undefined }
             let autoScroll: { cause: 'search' | 'saveScroll'; index: number } | undefined =
                 undefined
@@ -604,9 +611,13 @@ export namespace Chats {
                     .where(eq(chatEntries.chat_id, chatId))
                 await Promise.all(attachments.map(async (item) => deleteFile(item.uri)))
                 await database.delete(chats).where(eq(chats.id, chatId))
-                // Limpiar KV cache del chat eliminado
+                // Limpiar KV cache y estado del chat eliminado
                 await chatCacheManager.deleteChatSession(chatId)
                 KV.useKVStore.getState().removeChatTokens(chatId)
+                // Si era el chat activo, limpiar el estado para evitar FOREIGN KEY al reiniciar
+                if (Chats.useChatState.getState().id === chatId) {
+                    Chats.useChatState.getState().reset()
+                }
             }
 
             export const deleteChatEntry = async (entryId: number) => {
