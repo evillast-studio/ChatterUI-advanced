@@ -8,6 +8,10 @@ import { setBackgroundColorAsync as setUIBackgroundColor } from 'expo-system-ui'
 import { z } from 'zod'
 
 import { migrateData } from '@db/dataMigrations'
+import { db } from '@db/db'
+import { chats } from '@db/schema'
+import { Storage } from '@lib/enums/Storage'
+import { chatCacheManager } from '@lib/engine/Local/ChatCacheManager'
 import { Model } from '@lib/engine/Local/Model'
 import { Tokenizer } from '@lib/engine/Tokenizer'
 import { setupNotifications } from '@lib/notifications/Notifications'
@@ -237,6 +241,20 @@ const setCPUThreads = () => {
     mmkv.set(Global.CPUThreads, newThreads)
 }
 
+/**
+ * KV por chat: borra datos de versiones anteriores (mapa de tokens en MMKV) y los
+ * archivos de KV de chats que ya no existen (por ejemplo, al borrar un personaje).
+ */
+const cleanupChatKV = async () => {
+    try {
+        mmkv.remove(Storage.KV)
+        const rows = await db.select({ id: chats.id }).from(chats)
+        chatCacheManager.pruneOrphans(new Set(rows.map((row) => row.id)))
+    } catch (e) {
+        Logger.warn(`cleanupChatKV falló: ${e}`)
+    }
+}
+
 export const startupApp = () => {
     console.log('[APP STARTED]: T1APT')
     // DEV: Needed for Reset
@@ -284,6 +302,7 @@ export const startupApp = () => {
     migrateTextIntent_0_8_8_to_0_8_9()
     lockScreenOrientation()
     migrateData()
+    cleanupChatKV()
     const backgroundColor = Theme.useColorState.getState().color.neutral._100
     setUIBackgroundColor(backgroundColor)
 
