@@ -9,7 +9,6 @@ import ThemedTextInput from '@components/input/ThemedTextInput'
 import BottomSheet, { BottomSheetRef, createBottomSheetRef } from '@components/views/BottomSheet'
 import { useLiveQueryJoined } from '@lib/hooks/LiveQueryJoined'
 import { Chats } from '@lib/state/Chat'
-import { Llama } from '@lib/engine/Local/LlamaLocal'
 import { Theme } from '@lib/theme/ThemeManager'
 
 type ChatEditorStateProps = {
@@ -54,13 +53,6 @@ const ChatEditor = () => {
         hide()
         if (swipe && placeholderText !== swipe.swipe) {
             Chats.db.mutate.updateChatSwipe(swipe.id, placeholderText)
-            // El prompt va a cambiar desde este mensaje en adelante —
-            // invalidar el KV cache del chat para que la próxima generación
-            // no intente cargar un .bin que ya no coincide
-            const chatId = Chats.useChatState.getState().id
-            if (chatId) {
-                Llama.useLlamaModelStore.getState().invalidateChatKV(chatId)
-            }
         }
     }
 
