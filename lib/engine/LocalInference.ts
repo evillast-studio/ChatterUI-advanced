@@ -1,7 +1,6 @@
 import { JinjaFormattedChatResult } from 'cui-llama.rn'
 import { t } from 'i18next'
 
-import Alert from '@components/views/Alert'
 import { CompletionTimings } from '@db/schema'
 import { AppSettings } from '@lib/constants/GlobalValues'
 import { SamplerConfigData, SamplerID, Samplers } from '@lib/constants/SamplerData'
@@ -15,13 +14,13 @@ import { useTTSStore } from '@lib/state/TTS'
 import { mmkv } from '@lib/storage/MMKV'
 
 import { APIConfiguration, APISampler, APIValues } from './API/APIBuilder.types'
-import { maybeSummarizeContext } from './Local/ContextSummarizer'
 import {
     buildChatCompletionContext,
     buildTextCompletionContext,
     ContextBuilderParams,
 } from './API/ContextBuilder'
 import { Llama, LlamaConfig } from './Local/LlamaLocal'
+import { chatCacheManager } from './Local/ChatCacheManager'
 import { KV } from './Local/Model'
 
 export const localSamplerData: APISampler[] = [
@@ -235,6 +234,42 @@ const verifyModelLoaded = async (): Promise<boolean> => {
     return true
 }
 
+/** Mínimo de tokens en común para que valga la pena cargar el KV guardado de un chat. */
+const MIN_REUSE_TOKENS = 64
+
+/** Si el KV por chat está activo (por defecto sí). */
+const isChatKVEnabled = () => mmkv.getBoolean(AppSettings.SaveLocalKV) ?? true
+
+/** Guardado de KV en curso: la siguiente generación espera a que termine. */
+let kvSavePromise: Promise<void> = Promise.resolve()
+
+const commonPrefixLength = (a: number[], b: number[]) => {
+    const limit = Math.min(a.length, b.length)
+    let i = 0
+    while (i < limit && a[i] === b[i]) i++
+    return i
+}
+
+/** Restaura el KV guardado del chat activo si aporta algo para este prompt. */
+const restoreChatKV = async (chatId: number, prompt: string, mediaPaths?: string[]) => {
+    if (KV.useKVStore.getState().loadedChatId === chatId) return
+    if (!chatCacheManager.hasSession(chatId)) return
+
+    const saved = await chatCacheManager.readTokens(chatId)
+    if (saved && saved.length > 0) {
+        const tokens = (await Llama.useLlamaModelStore.getState().tokenize(prompt, mediaPaths))
+            ?.tokens
+        const common = commonPrefixLength(saved, tokens ?? [])
+        if (common < MIN_REUSE_TOKENS) {
+            Logger.info(`[KV] Chat ${chatId}: solo ${common} tokens en común, no se carga`)
+            return
+        }
+        Logger.info(`[KV] Chat ${chatId}: ${common}/${saved.length} tokens reutilizables`)
+    }
+    // Si no hay tokens guardados se carga igual: llama.cpp reutiliza el prefijo que coincida
+    await Llama.useLlamaModelStore.getState().loadKVForChat(chatId)
+}
+
 export const localInference = async () => {
     try {
         // Model Loading Routine
@@ -251,6 +286,8 @@ export const localInference = async () => {
             return
         }
 
+        await kvSavePromise
+
         const payload = await buildLocalPayload()
 
         if (!payload) {
@@ -260,39 +297,8 @@ export const localInference = async () => {
         }
 
         const chatId = Chats.useChatState.getState().id
-
-        // --- Carga KV por chat ---
-        // Cada chat tiene su propio .bin y sus propios tokens en kvCacheMap.
-        // Solo cargamos si el chat activo no es ya el que está en memoria (loadedChatId).
-        if (chatId && KV.useKVStore.getState().loadedChatId !== chatId) {
-            const kvStore = KV.useKVStore.getState()
-
-            if (kvStore.hasChatCache(chatId)) {
-                // Este chat tiene tokens guardados — verificar que el prompt coincide
-                const promptTokens = await Llama.useLlamaModelStore
-                    .getState()
-                    .tokenize(payload.prompt, payload.media_paths)
-                const verify = kvStore.verifyChatKVCache(chatId, promptTokens?.tokens ?? [])
-
-                if (verify.match) {
-                    // Prefijo completo — carga sin reescaneo
-                    await Llama.useLlamaModelStore.getState().loadKVForChat(chatId)
-                    Logger.info(`[KV] Chat ${chatId} reutilizado sin reescaneo`)
-                } else if (verify.matchLength > 0) {
-                    // Coincidencia parcial (ctx_shift, edición) — cargamos igual,
-                    // cache_prompt reescaneará solo los tokens que divergen
-                    await Llama.useLlamaModelStore.getState().loadKVForChat(chatId)
-                    Logger.info(
-                        `[KV] Chat ${chatId} parcial (${verify.matchLength}/${verify.cachedLength}) — ` +
-                        `cache_prompt reescaneará la diferencia`
-                    )
-                } else {
-                    // Sin coincidencia: prompt cambió radicalmente, no cargar
-                    Logger.info(`[KV] Sin coincidencia para chat ${chatId}, reescaneando`)
-                }
-            }
-            // Si no hay cache para este chat, cache_prompt hará prefix-reuse en memoria
-            // con lo que tenga del chat anterior (puede ser parcialmente útil)
+        if (chatId && isChatKVEnabled()) {
+            await restoreChatKV(chatId, payload.prompt, payload.media_paths)
         }
 
         await runLocalCompletion(payload)
@@ -347,14 +353,14 @@ const runLocalCompletion = async (
         if (mmkv.getBoolean(AppSettings.PrintContext)) Logger.info(`Completion Output:\n${text}`)
         stopGenerating()
 
-        // Guardar KV por chat después de cada completion exitosa.
-        // saveKVForChat usa el valor retornado por saveSession para saber cuántos
-        // tokens quedaron en el KV — funciona correctamente con ctx_shift y swa_full.
+        // Guardar el KV de este chat (con ctx_shift/swa_full también es válido: saveSession
+        // devuelve los tokens que realmente quedaron).
         const chatId = Chats.useChatState.getState().id
-        if (chatId) {
-            Llama.useLlamaModelStore
+        if (chatId && isChatKVEnabled()) {
+            kvSavePromise = Llama.useLlamaModelStore
                 .getState()
                 .saveKVForChat(chatId, payload.prompt, payload.media_paths ?? [])
+                .catch((e) => Logger.error(`[KV] No se pudo guardar el chat ${chatId}: ${e}`))
         }
     }
 
@@ -470,21 +476,6 @@ const obtainFields = async (): Promise<ContextBuilderParams | void> => {
             return
         }
 
-        const engineData = Llama.useLlamaPreferencesStore.getState().config
-        const samplers = SamplersManager.getCurrentSampler()
-
-        // Compresión automática de historial si está habilitada
-        const summarizeEnabled = mmkv.getBoolean(AppSettings.ContextSummarize) ?? false
-        const llamaContext = Llama.useLlamaModelStore.getState().context
-        const processedMessages = summarizeEnabled && llamaContext
-            ? await maybeSummarizeContext(messages, engineData.context_length, llamaContext, {
-                  triggerRatio: (mmkv.getNumber(AppSettings.SummaryTriggerRatio) ?? 75) / 100,
-                  recentCount: mmkv.getNumber(AppSettings.SummaryRecentCount) ?? 8,
-                  summaryMaxTokens: 300,
-                  summaryTemperature: 0.3,
-              })
-            : messages
-
         const apiValues = localAPIValues
         if (!apiValues) {
             Logger.warnToast(t('generation.errors.noActiveAPI'))
@@ -499,6 +490,9 @@ const obtainFields = async (): Promise<ContextBuilderParams | void> => {
             return
         }
 
+        const engineData = Llama.useLlamaPreferencesStore.getState().config
+        const samplers = SamplersManager.getCurrentSampler()
+
         const instructLength = engineData.context_length
         const length = Math.max(instructLength - samplers.genamt, 0)
 
@@ -509,7 +503,7 @@ const obtainFields = async (): Promise<ContextBuilderParams | void> => {
             instruct: instructState.replacedMacros(),
             character: Object.assign({}, characterCard),
             user: Object.assign({}, userCard),
-            messages: [...processedMessages],
+            messages: [...messages],
             chatTokenizer: async (entry, index) => {
                 // IMPORTANT - we use -1 for dummy entries
                 if (entry.id === -1) return 0
