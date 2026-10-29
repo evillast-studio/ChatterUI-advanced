@@ -5,14 +5,11 @@ import { getDocumentAsync } from 'expo-document-picker'
 import { t } from 'i18next'
 import { Platform } from 'react-native'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 
 import { db } from '@db/db'
 import { model_data, model_mmproj_links, ModelDataType } from '@db/schema'
-import { Storage } from '@lib/enums/Storage'
 import { CharacterLink } from '@lib/state/CharacterLinks'
 import { Logger } from '@lib/state/Logger'
-import { createMMKVStorage } from '@lib/storage/MMKV'
 import {
     AppDirectory,
     copyFile,
@@ -24,6 +21,7 @@ import {
     readFileMagic,
 } from '@lib/utils/File'
 
+import { chatCacheManager } from './ChatCacheManager'
 import { GGMLNameMap, GGMLType } from './GGML'
 
 export type ModelData = Omit<ModelDataType, 'id' | 'create_date' | 'last_modified'>
@@ -161,10 +159,6 @@ export namespace Model {
         return setModelDataInternal(filename, newdir, deleteOnFailure)
     }
 
-    export const getModelListQuery = () => {
-        return db.query.model_data.findMany()
-    }
-
     export const getModelListQuery2 = () => {
         return db.query.model_data.findMany({
             where: notInArray(model_data.architecture, mmprojArchs),
@@ -299,116 +293,38 @@ export namespace Model {
     }
 }
 
-type KvVerifyResult = {
-    match: boolean
-    matchLength: number
-    inputLength: number
-    cachedLength: number
-}
-
 type KVStateProps = {
     /**
-     * chatId actualmente cargado en el KV cache en memoria del contexto llama.
-     * null = ninguno cargado (requiere reescaneo o carga desde disco).
+     * chatId cuyo KV está cargado ahora mismo en el contexto de llama.
+     * null = ninguno (tras cargar/descargar un modelo hay que cargarlo desde disco).
+     * Solo vive en memoria: los KV y sus tokens se guardan en archivos por chat.
      */
     loadedChatId: number | null
-    /**
-     * Mapa persistido: chatId -> tokens efectivos guardados en disco.
-     * Cada chat tiene sus propios tokens independientemente del resto.
-     */
-    kvCacheMap: Record<number, number[]>
     setLoadedChatId: (id: number | null) => void
-    setChatTokens: (chatId: number, tokens: number[]) => void
-    removeChatTokens: (chatId: number) => void
-    verifyChatKVCache: (chatId: number, tokens: number[]) => KvVerifyResult
-    hasChatCache: (chatId: number) => boolean
 }
 
 export namespace KV {
-    export const useKVStore = create<KVStateProps>()(
-        persist(
-            (set, get) => ({
-                loadedChatId: null,
-                kvCacheMap: {},
-                setLoadedChatId: (id) => {
-                    set({ loadedChatId: id })
-                },
-                setChatTokens: (chatId, tokens) => {
-                    set((state) => ({
-                        kvCacheMap: { ...state.kvCacheMap, [chatId]: tokens },
-                    }))
-                },
-                removeChatTokens: (chatId) => {
-                    set((state) => {
-                        const next = { ...state.kvCacheMap }
-                        delete next[chatId]
-                        return { kvCacheMap: next }
-                    })
-                },
-                verifyChatKVCache: (chatId, tokens) => {
-                    const cachedTokens = get().kvCacheMap[chatId] ?? []
-                    let matched = 0
-                    const [a, b] =
-                        cachedTokens.length <= tokens.length
-                            ? [cachedTokens, tokens]
-                            : [tokens, cachedTokens]
-                    a.forEach((v, i) => {
-                        if (v === b[i]) matched++
-                    })
-                    return {
-                        match: matched === a.length && a.length > 0,
-                        cachedLength: cachedTokens.length,
-                        inputLength: tokens.length,
-                        matchLength: matched,
-                    }
-                },
-                hasChatCache: (chatId) => {
-                    return (get().kvCacheMap[chatId]?.length ?? 0) > 0
-                },
-            }),
-            {
-                name: Storage.KV,
-                partialize: (state) => ({
-                    kvCacheMap: state.kvCacheMap,
-                }),
-                storage: createMMKVStorage(),
-                version: 2,
-                migrate: (persisted: any, version: number) => {
-                    // Migrar del formato anterior (v1: kvCacheTokens + cachedChatId)
-                    if (version < 2) {
-                        const old = persisted as {
-                            kvCacheTokens?: number[]
-                            cachedChatId?: number | null
-                        }
-                        const map: Record<number, number[]> = {}
-                        if (old.cachedChatId != null && old.kvCacheTokens?.length) {
-                            map[old.cachedChatId] = old.kvCacheTokens
-                        }
-                        return { kvCacheMap: map }
-                    }
-                    return persisted
-                },
-            }
-        )
-    )
+    export const useKVStore = create<KVStateProps>()((set) => ({
+        loadedChatId: null,
+        setLoadedChatId: (id) => set({ loadedChatId: id }),
+    }))
 
-    export const sessionFile = `${AppDirectory.SessionPath}llama-session.bin`
+    /** Archivo único de la versión anterior (KV global). Ya no se escribe, solo se limpia. */
+    const legacySessionFile = `${AppDirectory.SessionPath}llama-session.bin`
 
+    /** Tamaño total del KV guardado: todos los chats + restos del archivo global antiguo. */
     export const getKVSize = async () => {
-        const data = fileInfo(sessionFile)
-        return data.size ?? 0
+        let legacy = 0
+        try {
+            if (fileExists(legacySessionFile)) legacy = fileInfo(legacySessionFile).size ?? 0
+        } catch {}
+        return chatCacheManager.getTotalSize() + legacy
     }
 
+    /** Borra el KV guardado de todos los chats y el archivo global antiguo. */
     export const deleteKV = async () => {
-        deleteFile(sessionFile)
-    }
-
-    export const kvInfo = async () => {
-        const data = fileInfo(sessionFile)
-        if (!data.exists) {
-            Logger.warn('No KV Cache found')
-            return
-        }
-        Logger.info(`Size of KV cache: ${Math.floor(data.size ?? 0 * 0.000001)} MB`)
+        chatCacheManager.clearAllSessions()
+        deleteFile(legacySessionFile)
+        useKVStore.getState().setLoadedChatId(null)
     }
 }

@@ -1,154 +1,177 @@
 /**
- * ChatCacheManager — KV cache por conversación individual
+ * ChatCacheManager — KV cache persistente por conversación.
  *
- * A diferencia del KV global (llama-session.bin), este manager guarda
- * un archivo de sesión separado por chatId. Permite retomar cualquier
- * conversación sin recalcular el contexto completo desde cero.
+ * Por cada chat se guardan dos archivos en `session/chat_kv/`:
+ *   - session_<chatId>.bin    estado KV de llama.cpp (saveSession / loadSession)
+ *   - session_<chatId>.json   tokens del prompt con el que se generó ese estado
  *
- * Uso:
- *   const cache = new ChatCacheManager()
- *   await cache.saveChatSession(context, chatId)
- *   const ok = await cache.loadChatSession(context, chatId)
+ * Los tokens viven en disco (no en MMKV/memoria) y solo se leen cuando se va a
+ * decidir si cargar el .bin de un chat, así la app no los mantiene en RAM.
  */
 
-import RNFS from '@vali98/react-native-fs'
+import { File } from 'expo-file-system'
 
-import { AppDirectory } from '@lib/utils/File'
 import { Logger } from '@lib/state/Logger'
+import {
+    AppDirectory,
+    deleteFile,
+    fileExists,
+    fileInfo,
+    listFiles,
+    makeDirectory,
+} from '@lib/utils/File'
+
+/** Máximo de chats con KV guardado; al pasarse se borran los más antiguos. */
+const MAX_CHAT_SESSIONS = 8
+
+const toNativePath = (uri: string) => uri.replace('file://', '')
 
 export class ChatCacheManager {
-    private baseDir: string
-    private dirReady: Promise<void>
+    private readonly baseDir = `${AppDirectory.SessionPath}chat_kv/`
 
-    constructor(baseDir?: string) {
-        // Quitar file:// — RNFS.mkdir y exists no aceptan ese prefijo
-        this.baseDir = (baseDir ?? `${AppDirectory.SessionPath}chat_kv`).replace('file://', '')
-        this.dirReady = this.ensureDirectoryExists()
-    }
-
-    /** Crea el directorio de sesiones si no existe */
-    private async ensureDirectoryExists(): Promise<void> {
+    private ensureDirectory() {
         try {
-            const exists = await RNFS.exists(this.baseDir)
-            if (!exists) {
-                await RNFS.mkdir(this.baseDir)
-                Logger.info(`[ChatCacheManager] Directorio creado: ${this.baseDir}`)
-            }
+            makeDirectory(AppDirectory.SessionPath)
+            makeDirectory(this.baseDir)
         } catch (e) {
-            Logger.error(`[ChatCacheManager] No se pudo crear directorio: ${this.baseDir}`, e)
+            Logger.error(`[ChatCacheManager] No se pudo crear el directorio: ${e}`)
         }
     }
 
-    /** Ruta del archivo de caché para un chatId específico */
-    getSessionPath(chatId: number | string): string {
-        return `${this.baseDir}/session_${chatId}.bin`
+    getSessionPath(chatId: number) {
+        return `${this.baseDir}session_${chatId}.bin`
     }
 
-    /**
-     * Guarda el KV cache del contexto actual para el chat indicado.
-     * Retorna true si tuvo éxito, false en caso contrario.
-     */
+    private getTokensPath(chatId: number) {
+        return `${this.baseDir}session_${chatId}.json`
+    }
+
+    hasSession(chatId: number) {
+        try {
+            return fileExists(this.getSessionPath(chatId))
+        } catch {
+            return false
+        }
+    }
+
+    /** Guarda el KV actual del contexto. Devuelve los tokens escritos, o -1 si falló. */
     async saveChatSession(
         context: { saveSession: (path: string) => Promise<number> },
-        chatId: number | string
-    ): Promise<boolean> {
-        if (!context || chatId === undefined || chatId === null) return false
-        await this.dirReady
-        const sessionPath = this.getSessionPath(chatId)
+        chatId: number
+    ): Promise<number> {
+        this.ensureDirectory()
         try {
-            const tokens = await context.saveSession(sessionPath.replace('file://', ''))
+            const tokens = await context.saveSession(toNativePath(this.getSessionPath(chatId)))
             if (tokens === -1) {
-                Logger.warn(`[ChatCacheManager] saveSession devolvió -1 para chat ${chatId}`)
-                return false
+                Logger.warn(`[ChatCacheManager] saveSession devolvió -1 (chat ${chatId})`)
+                return -1
             }
-            Logger.info(`[ChatCacheManager] Caché guardado para chat ${chatId} (${tokens} tokens)`)
-            return true
-        } catch (error) {
-            Logger.error(`[ChatCacheManager] Error al guardar caché para chat ${chatId}`, error)
-            return false
+            return tokens
+        } catch (e) {
+            Logger.error(`[ChatCacheManager] Error al guardar KV del chat ${chatId}: ${e}`)
+            return -1
         }
     }
 
-    /**
-     * Carga el KV cache de una sesión previa.
-     * Si el archivo está corrupto, lo elimina automáticamente sin
-     * afectar otras conversaciones.
-     * Retorna true si la carga fue exitosa.
-     */
+    /** Carga el KV de un chat. Si el archivo está corrupto lo borra y devuelve false. */
     async loadChatSession(
-        context: { loadSession: (path: string) => Promise<void> },
-        chatId: number | string
+        context: { loadSession: (path: string) => Promise<unknown> },
+        chatId: number
     ): Promise<boolean> {
-        if (!context || chatId === undefined || chatId === null) return false
-        const sessionPath = this.getSessionPath(chatId)
-
-        const exists = await RNFS.exists(sessionPath)
-        if (!exists) return false
-
+        if (!this.hasSession(chatId)) return false
         try {
-            await context.loadSession(sessionPath.replace('file://', ''))
-            Logger.info(`[ChatCacheManager] Caché cargado para chat ${chatId}`)
+            await context.loadSession(toNativePath(this.getSessionPath(chatId)))
             return true
-        } catch (error) {
-            Logger.warn(
-                `[ChatCacheManager] Caché corrupto en chat ${chatId}. Eliminando perfil dañado...`,
-                error
-            )
-            // Elimina solo el archivo afectado, sin tocar los demás chats
-            await this.deleteChatSession(chatId)
+        } catch (e) {
+            Logger.warn(`[ChatCacheManager] KV corrupto en chat ${chatId}, eliminando: ${e}`)
+            this.deleteChatSession(chatId)
             return false
         }
     }
 
-    /**
-     * Elimina el archivo de caché de una conversación específica.
-     * Útil al borrar un chat o forzar regeneración.
-     */
-    async deleteChatSession(chatId: number | string): Promise<void> {
-        const sessionPath = this.getSessionPath(chatId)
-        if (await RNFS.exists(sessionPath)) {
-            await RNFS.unlink(sessionPath)
-            Logger.info(`[ChatCacheManager] Caché eliminado para chat ${chatId}`)
-        }
-    }
-
-    /**
-     * Elimina todos los archivos de caché de todas las conversaciones.
-     */
-    async clearAllSessions(): Promise<void> {
-        if (await RNFS.exists(this.baseDir)) {
-            await RNFS.unlink(this.baseDir)
-            await RNFS.mkdir(this.baseDir)
-            Logger.info('[ChatCacheManager] Todos los cachés eliminados')
-        }
-    }
-
-    /**
-     * Retorna el tamaño en bytes del archivo de caché de un chat,
-     * o 0 si no existe.
-     */
-    async getSessionSize(chatId: number | string): Promise<number> {
-        const sessionPath = this.getSessionPath(chatId)
+    saveTokens(chatId: number, tokens: number[]) {
         try {
-            const stat = await RNFS.stat(sessionPath)
-            return stat.size ?? 0
-        } catch {
-            return 0
+            const file = new File(this.getTokensPath(chatId))
+            if (!file.exists) file.create()
+            file.write(JSON.stringify(tokens))
+        } catch (e) {
+            Logger.warn(`[ChatCacheManager] No se pudieron guardar los tokens del chat ${chatId}: ${e}`)
         }
     }
 
-    /** Tamaño total en bytes de todos los archivos session_*.bin */
-    async getTotalSize(): Promise<number> {
+    /** Tokens del prompt guardado, o undefined si no hay / no se pueden leer. */
+    async readTokens(chatId: number): Promise<number[] | undefined> {
         try {
-            const exists = await RNFS.exists(this.baseDir)
-            if (!exists) return 0
-            const files = await RNFS.readDir(this.baseDir)
-            return files.reduce((acc, f) => acc + (f.size ?? 0), 0)
+            const path = this.getTokensPath(chatId)
+            if (!fileExists(path)) return undefined
+            const parsed = JSON.parse(await new File(path).text())
+            return Array.isArray(parsed) ? parsed : undefined
         } catch {
-            return 0
+            return undefined
         }
+    }
+
+    deleteChatSession(chatId: number) {
+        deleteFile(this.getSessionPath(chatId))
+        deleteFile(this.getTokensPath(chatId))
+    }
+
+    clearAllSessions() {
+        for (const name of this.listSessionFiles()) deleteFile(`${this.baseDir}${name}`)
+    }
+
+    /** Tamaño total en bytes de todos los KV guardados. */
+    getTotalSize() {
+        let total = 0
+        for (const name of this.listSessionFiles()) {
+            try {
+                total += fileInfo(`${this.baseDir}${name}`).size ?? 0
+            } catch {}
+        }
+        return total
+    }
+
+    /** Borra los KV de chats que ya no existen. */
+    pruneOrphans(validChatIds: Set<number>) {
+        for (const id of this.listChatIds()) {
+            if (!validChatIds.has(id)) this.deleteChatSession(id)
+        }
+    }
+
+    /** Si hay más de MAX_CHAT_SESSIONS KV guardados, borra los menos recientes. */
+    pruneOldest(keepChatId?: number) {
+        try {
+            const entries = this.listChatIds().map((id) => ({
+                id,
+                modified: fileInfo(this.getSessionPath(id)).modificationTime ?? 0,
+            }))
+            if (entries.length <= MAX_CHAT_SESSIONS) return
+            entries
+                .filter((item) => item.id !== keepChatId)
+                .sort((a, b) => a.modified - b.modified)
+                .slice(0, entries.length - MAX_CHAT_SESSIONS)
+                .forEach((item) => this.deleteChatSession(item.id))
+        } catch (e) {
+            Logger.warn(`[ChatCacheManager] No se pudo limpiar KV antiguos: ${e}`)
+        }
+    }
+
+    private listSessionFiles(): string[] {
+        try {
+            return listFiles(this.baseDir)
+        } catch {
+            return []
+        }
+    }
+
+    private listChatIds(): number[] {
+        const ids = new Set<number>()
+        for (const name of this.listSessionFiles()) {
+            const match = /^session_(\d+)\.bin$/.exec(name)
+            if (match) ids.add(Number(match[1]))
+        }
+        return [...ids]
     }
 }
 
-/** Instancia singleton lista para usar en toda la app */
 export const chatCacheManager = new ChatCacheManager()

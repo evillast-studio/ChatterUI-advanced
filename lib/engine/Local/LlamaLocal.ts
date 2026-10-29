@@ -12,15 +12,12 @@ import { persist } from 'zustand/middleware'
 
 import { ModelDataType } from '@db/schema'
 import { Storage } from '@lib/enums/Storage'
-import { AppDirectory } from '@lib/utils/File'
 
 import { chatCacheManager } from './ChatCacheManager'
-import { Chats } from '@lib/state/Chat'
 import { checkGGMLDeprecated } from './GGML'
 import { KV, Model } from './Model'
-import { AppSettings } from '../../constants/GlobalValues'
 import { Logger } from '../../state/Logger'
-import { createMMKVStorage, mmkv } from '../../storage/MMKV'
+import { createMMKVStorage } from '../../storage/MMKV'
 
 export type CompletionTimings = {
     predicted_per_token_ms: number
@@ -51,12 +48,11 @@ export type LlamaState = {
     setLoadProgress: (progress: number) => void
     unload: () => Promise<void>
     unloadMmproj: () => Promise<void>
-
-    /** Guarda el KV cache en un archivo por chatId. Independiente de SaveLocalKV. */
+    /** Guarda el KV del contexto en el archivo del chat (y los tokens del prompt). */
     saveKVForChat: (chatId: number, prompt: string, media_paths?: string[]) => Promise<void>
-    /** Carga el KV cache de un chatId específico. Retorna true si tuvo éxito. */
+    /** Carga el KV guardado de un chat. Devuelve true si se restauró. */
     loadKVForChat: (chatId: number) => Promise<boolean>
-    /** Elimina el archivo de cache de un chat específico (tras edición o borrado). */
+    /** Borra el KV guardado de un chat. */
     invalidateChatKV: (chatId: number) => Promise<void>
     completion: (
         params: CompletionParams,
@@ -93,11 +89,6 @@ export type LlamaConfig = {
     no_kv_offload: boolean
 }
 
-export type LlamaProfile = {
-    name: string
-    config: LlamaConfig
-}
-
 export type EngineDataProps = {
     config: LlamaConfig
     lastModel?: ModelDataType
@@ -113,6 +104,7 @@ export type EngineDataProps = {
     deleteProfile: (name: string) => void
     renameProfile: (oldName: string, newName: string) => void
 }
+
 
 const defaultConfig: LlamaConfig = {
     // CPU
@@ -363,6 +355,7 @@ export namespace Llama {
             }
 
             await get().context?.release()
+            KV.useKVStore.getState().setLoadedChatId(null)
             set({
                 context: undefined,
                 model: undefined,
@@ -402,83 +395,46 @@ export namespace Llama {
                         `\n---- Start Chat ${get().chatCount} ----\n${textTimings(timings)}\n---- End Chat ${get().chatCount} ----\n`
                     )
                     set({ chatCount: get().chatCount + 1 })
-                    if (mmkv.getBoolean(AppSettings.SaveLocalKV)) {
-                        const activeChatId = Chats.useChatState.getState().id
-                        if (activeChatId) {
-                            await get().saveKVForChat(activeChatId, params.prompt ?? '', params.media_paths ?? [])
-                        }
-                    }
                 })
         },
         stopCompletion: async () => {
             await get().context?.stopCompletion()
         },
-
         saveKVForChat: async (chatId, prompt, media_paths = []) => {
             const llamaContext = get().context
             if (!llamaContext) return
 
             const now = performance.now()
-            const sessionPath = chatCacheManager.getSessionPath(chatId)
+            const saved = await chatCacheManager.saveChatSession(llamaContext, chatId)
+            if (saved < 0) return
 
-            // saveSession retorna el número de tokens efectivamente guardados en el .bin.
-            // Con ctx_shift, este número es <= tokens del prompt original (los tokens
-            // desplazados no están). Guardamos exactamente esos tokens para verificación.
-            const savedTokenCount = await llamaContext
-                .saveSession(sessionPath.replace('file://', ''))
-                .catch(() => -1)
-
-            if (savedTokenCount === -1) {
-                Logger.warn(`[KV] saveSession falló para chat ${chatId}`)
-                return
-            }
-
-            // Tokenizamos el prompt completo y tomamos solo los primeros N tokens
-            // que quedaron en el KV — eso es lo que el próximo loadSession restaurará
-            const allTokens = (await get().tokenize(prompt, media_paths))?.tokens ?? []
-            const effectiveTokens = allTokens.slice(0, savedTokenCount)
-
-            KV.useKVStore.getState().setKvCacheTokens(effectiveTokens)
-            KV.useKVStore.getState().setCachedChatId(chatId)
+            // Tokens que realmente quedaron en el KV (con ctx_shift pueden ser menos que el prompt)
+            const promptTokens = (await get().tokenize(prompt, media_paths))?.tokens ?? []
+            chatCacheManager.saveTokens(chatId, promptTokens.slice(0, saved))
+            chatCacheManager.pruneOldest(chatId)
+            KV.useKVStore.getState().setLoadedChatId(chatId)
 
             Logger.info(
-                `[KV] Chat ${chatId} guardado en ${Math.floor(performance.now() - now)}ms` +
-                ` (${savedTokenCount}/${allTokens.length} tokens en KV)`
+                `[KV] Chat ${chatId} guardado en ${Math.floor(performance.now() - now)}ms (${saved} tokens)`
             )
         },
         loadKVForChat: async (chatId) => {
             const llamaContext = get().context
             if (!llamaContext) return false
 
-            const sessionPath = chatCacheManager.getSessionPath(chatId)
-            const exists = await (await import('@vali98/react-native-fs')).default.exists(sessionPath)
-            if (!exists) return false
-
             const now = performance.now()
-            let ok = false
-            await llamaContext
-                .loadSession(sessionPath.replace('file://', ''))
-                .then(() => {
-                    ok = true
-                    Logger.info(
-                        `[KV] Chat ${chatId} cargado en ${Math.floor(performance.now() - now)}ms`
-                    )
-                })
-                .catch((e) => {
-                    Logger.warn(`[KV] loadSession falló para chat ${chatId}, eliminando cache`, e)
-                    chatCacheManager.deleteChatSession(chatId)
-                })
+            const ok = await chatCacheManager.loadChatSession(llamaContext, chatId)
+            if (ok) {
+                KV.useKVStore.getState().setLoadedChatId(chatId)
+                Logger.info(`[KV] Chat ${chatId} cargado en ${Math.floor(performance.now() - now)}ms`)
+            }
             return ok
         },
         invalidateChatKV: async (chatId) => {
-            await chatCacheManager.deleteChatSession(chatId)
-            // Si el cache en memoria era de este chat, marcarlo como no cargado
-            if (KV.useKVStore.getState().cachedChatId === chatId) {
+            chatCacheManager.deleteChatSession(chatId)
+            if (KV.useKVStore.getState().loadedChatId === chatId) {
                 KV.useKVStore.getState().setLoadedChatId(null)
-                KV.useKVStore.getState().setCachedChatId(null)
-                KV.useKVStore.getState().setKvCacheTokens([])
             }
-            Logger.info(`[KV] Cache invalidado para chat ${chatId}`)
         },
         tokenLength: async (text: string, mediaPaths: string[] = []) => {
             const finalPaths = get().mmproj ? mediaPaths : []
