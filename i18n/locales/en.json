@@ -672,10 +672,6 @@
         "external": "\n\n(This will not delete external model files, just this entry)",
         "internal": "\n\nThis operation will clear up {{size}}",
         "title": "Delete Model"
-      },
-      "deletechatsessions": {
-        "title": "Purge Chat Sessions",
-        "description": "Delete all per-chat KV cache files ({{size}})? Each chat will need to re-evaluate its context on the next generation."
       }
     },
     "autoload": "Automatically Load Model On Chat",
@@ -704,8 +700,8 @@
     "modelnamechat": "Show Model Name In Chat",
     "mtmd": "Multimodal Adapters",
     "purgekv": "Purge KV Cache ({{size}})",
-    "savekv": "Save Local KV",
-    "savekvdesc": "Saves the KV cache on generations, allowing you to continue sessions after closing the app. Must use the same model for this to function properly. Saving the KV cache file may be very big and negatively impact battery life!",
+    "savekv": "Save KV cache per chat",
+    "savekvdesc": "Saves each chat's KV cache after generating, so you can resume it after closing the app or switching chats without re-processing the whole conversation. Only the 8 most recent chats are kept. Files can be large and saving uses extra battery.",
     "selectmmproj": "Select MMPROJ Model",
     "settings": {
       "advanced": "Advanced Settings",
@@ -713,8 +709,7 @@
       "title": "Model Settings",
       "gpu": "GPU / Backend",
       "math": "Math & Precision",
-      "context": "Context Management",
-      "summarizer": "Context Summarizer"
+      "context": "Context Management"
     },
     "threads": "Threads",
     "title": "Models",
@@ -737,8 +732,7 @@
       "modelMissingEntryDeleted": "Model missing, its entry will be deleted: {{name}}",
       "noAutoLoadModelSet": "No Auto-Load Model Set",
       "noModelLoaded": "No Model Loaded",
-      "quantizationNoLongerSupported": "Quantization No Longer Supported!",
-      "deletechatsessions": "Chat KV sessions deleted"
+      "quantizationNoLongerSupported": "Quantization No Longer Supported!"
     },
     "unlinkmmproj": "Unlink MMPROJ",
     "ubatch": "Micro-Batch Size (uBatch)",
@@ -764,12 +758,7 @@
     "disablelogs": "Disable Logs",
     "disablelogsdesc": "Silences info/warn/debug logs. Critical errors are always shown.",
     "nokvoffload": "No KV Offload (GPU Hybrid)",
-    "nokvoffloaddesc": "GPU handles matrix multiplications, CPU manages the KV cache. Recommended for Mali/Adreno GPUs with limited VRAM. Reduces stutter in long contexts.",
-    "summarize": "Auto-Summarize Context",
-    "summarizedesc": "When the conversation approaches the context limit, summarizes older messages using the loaded model. Recent turns stay intact.",
-    "summarizeTrigger": "Trigger Threshold (%)",
-    "summarizeRecent": "Recent Messages to Keep",
-    "purgechatsessions": "Purge Chat Sessions ({{size}})"
+    "nokvoffloaddesc": "GPU handles matrix multiplications, CPU manages the KV cache. Recommended for Mali/Adreno GPUs with limited VRAM. Reduces stutter in long contexts."
   },
   "multiDropdown": {
     "counter_one": "Selected {{count}} item",
