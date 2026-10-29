@@ -54,13 +54,6 @@ type TTSState = {
     insertBuffer: (text: string) => void
 }
 
-/**
- * Regex para detectar fin de oración.
- * No usa flag /g para evitar problemas de lastIndex entre llamadas.
- */
-const sentenceEndRegex =
-    /(?<=[^\d])([。…？！.?!])(?:["'`*_)]*)\s+(?=[A-Z0-9])|([。…？！.?!])(?:["'`*_)]*)\s*$/m
-
 useInference.subscribe(async ({ nowGenerating }) => {
     const chatId = Chats.useChatState.getState().id
     if (!chatId) return

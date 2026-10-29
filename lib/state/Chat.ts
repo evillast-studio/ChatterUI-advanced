@@ -18,13 +18,12 @@ import {
     ChatType,
     CompletionTimings,
 } from '@db/schema'
+import { chatCacheManager } from '@lib/engine/Local/ChatCacheManager'
 import { Tokenizer } from '@lib/engine/Tokenizer'
 import { replaceMacros } from '@lib/state/Macros'
 import { AppDirectory, copyFile, deleteFile, fileInfo } from '@lib/utils/File'
 import { convertToFormatInstruct } from '@lib/utils/TextFormat'
 
-import { chatCacheManager } from '@lib/engine/Local/ChatCacheManager'
-import { KV } from '@lib/engine/Local/Model'
 import { Characters } from './Characters'
 import { Logger } from './Logger'
 import { AppSettings } from '../constants/GlobalValues'
@@ -174,13 +173,6 @@ export namespace Chats {
     export const useChatState = create<ChatState>((set, get: () => ChatState) => ({
         buffer: { data: '' },
         setId: async (chatId) => {
-            // Verificar que el chat existe antes de cargar — evita FOREIGN KEY al reiniciar
-            const exists = await db.query.chatExists(chatId)
-            if (!exists) {
-                Logger.warn(`[Chat] chatId ${chatId} no existe en DB, limpiando estado`)
-                set({ id: undefined })
-                return
-            }
             const data = { ...(await db.query.chatNew(chatId)), autoScroll: undefined }
             let autoScroll: { cause: 'search' | 'saveScroll'; index: number } | undefined =
                 undefined
@@ -611,13 +603,7 @@ export namespace Chats {
                     .where(eq(chatEntries.chat_id, chatId))
                 await Promise.all(attachments.map(async (item) => deleteFile(item.uri)))
                 await database.delete(chats).where(eq(chats.id, chatId))
-                // Limpiar KV cache y estado del chat eliminado
-                await chatCacheManager.deleteChatSession(chatId)
-                KV.useKVStore.getState().removeChatTokens(chatId)
-                // Si era el chat activo, limpiar el estado para evitar FOREIGN KEY al reiniciar
-                if (Chats.useChatState.getState().id === chatId) {
-                    Chats.useChatState.getState().reset()
-                }
+                chatCacheManager.deleteChatSession(chatId)
             }
 
             export const deleteChatEntry = async (entryId: number) => {

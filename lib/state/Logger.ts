@@ -1,14 +1,30 @@
 import Toast from 'react-native-simple-toast'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist, StateStorage } from 'zustand/middleware'
 
 import { Storage } from '@lib/enums/Storage'
 
 import { AppSettings } from '../constants/GlobalValues'
-import { createMMKVStorage, mmkv } from '../storage/MMKV'
+import { mmkv, mmkvStorage } from '../storage/MMKV'
+
+// Cada log reescribía todo el arreglo en MMKV; ahora se agrupa en una sola escritura
+let pendingWrite: ReturnType<typeof setTimeout> | undefined
+const debouncedLogStorage: StateStorage = {
+    getItem: (name) => mmkvStorage.getItem(name),
+    removeItem: (name) => mmkvStorage.removeItem(name),
+    setItem: (name, value) => {
+        if (pendingWrite) clearTimeout(pendingWrite)
+        pendingWrite = setTimeout(() => {
+            pendingWrite = undefined
+            mmkvStorage.setItem(name, value)
+        }, persistDelayMs)
+    },
+}
 
 const toastTime = Toast.SHORT
-const maxloglength = 2000
+const maxloglength = 500
+const maxMessageLength = 2000
+const persistDelayMs = 1500
 
 export enum LogLevel {
     INFO,
@@ -35,8 +51,12 @@ export namespace Logger {
             (set, get) => ({
                 logs: [],
                 addLog: (entry) => {
-                    const newlogs = [...get().logs, entry]
-                    if (newlogs.length > maxloglength) newlogs.shift()
+                    const message =
+                        entry.message.length > maxMessageLength
+                            ? entry.message.slice(0, maxMessageLength) + '… [truncado]'
+                            : entry.message
+                    const newlogs = [...get().logs, { ...entry, message }]
+                    if (newlogs.length > maxloglength) newlogs.splice(0, newlogs.length - maxloglength)
                     set({ logs: newlogs })
                 },
                 flushLogs: () => {
@@ -45,7 +65,7 @@ export namespace Logger {
             }),
             {
                 name: Storage.Logs,
-                storage: createMMKVStorage(),
+                storage: createJSONStorage(() => debouncedLogStorage),
                 version: 1,
                 partialize: (state) => ({
                     logs: state.logs,
