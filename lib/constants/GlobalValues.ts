@@ -145,9 +145,6 @@ export enum AppSettings {
     KeepAwake = 'settings-keep-awake',
     DisableLogs = 'settings-disable-logs',
     CachePrompt = 'settings-cache-prompt',
-    ContextSummarize = 'settings-context-summarize',
-    SummaryTriggerRatio = 'settings-summary-trigger-ratio',
-    SummaryRecentCount = 'settings-summary-recent-count',
 }
 
 /**
@@ -162,7 +159,7 @@ export const AppSettingsDefault: Record<AppSettings, boolean> = {
     [AppSettings.DarkMode]: true,
     [AppSettings.DevMode]: false,
     [AppSettings.SendOnEnter]: false,
-    [AppSettings.SaveLocalKV]: false,
+    [AppSettings.SaveLocalKV]: true,
     [AppSettings.PrintContext]: false,
     [AppSettings.CreateDefaultCard]: true,
     [AppSettings.BypassContextLength]: false,
@@ -187,9 +184,6 @@ export const AppSettingsDefault: Record<AppSettings, boolean> = {
     [AppSettings.KeepAwake]: true,
     [AppSettings.DisableLogs]: true,
     [AppSettings.CachePrompt]: true,
-    [AppSettings.ContextSummarize]: false,
-    [AppSettings.SummaryTriggerRatio]: 75,
-    [AppSettings.SummaryRecentCount]: 8,
 }
 
 export const CLAUDE_VERSION = '2023-06-01'
