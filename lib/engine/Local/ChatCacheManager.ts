@@ -21,8 +21,8 @@ import {
     makeDirectory,
 } from '@lib/utils/File'
 
-/** Máximo de chats con KV guardado; al pasarse se borran los más antiguos. */
-const MAX_CHAT_SESSIONS = 8
+/** Máximo de chats con KV guardado por personaje; al pasarse se borran los más antiguos de ese personaje. */
+const MAX_CHATS_PER_CHARACTER = 8
 
 const toNativePath = (uri: string) => uri.replace('file://', '')
 
@@ -30,11 +30,11 @@ export class ChatCacheManager {
     private readonly baseDir = `${AppDirectory.SessionPath}chat_kv/`
 
     private ensureDirectory() {
-        try {
-            makeDirectory(AppDirectory.SessionPath)
-            makeDirectory(this.baseDir)
-        } catch (e) {
-            Logger.error(`[ChatCacheManager] No se pudo crear el directorio: ${e}`)
+        // makeDirectory es async: sin .catch un fallo sería un rechazo sin manejar
+        for (const dir of [AppDirectory.SessionPath, this.baseDir]) {
+            makeDirectory(dir).catch((e) =>
+                Logger.error(`[ChatCacheManager] No se pudo crear ${dir}: ${e}`)
+            )
         }
     }
 
@@ -138,18 +138,24 @@ export class ChatCacheManager {
         }
     }
 
-    /** Si hay más de MAX_CHAT_SESSIONS KV guardados, borra los menos recientes. */
-    pruneOldest(keepChatId?: number) {
+    /**
+     * Si hay más de MAX_CHATS_PER_CHARACTER KV del mismo personaje, borra los menos recientes.
+     * Cada personaje tiene su propio límite de 8 chats independientemente de los demás.
+     */
+    pruneOldest(keepChatId: number, characterChatIds: number[]) {
         try {
-            const entries = this.listChatIds().map((id) => ({
-                id,
-                modified: fileInfo(this.getSessionPath(id)).modificationTime ?? 0,
-            }))
-            if (entries.length <= MAX_CHAT_SESSIONS) return
+            // Solo los chats de este personaje que tengan KV guardado
+            const entries = characterChatIds
+                .filter((id) => this.hasSession(id))
+                .map((id) => ({
+                    id,
+                    modified: (() => { try { return fileInfo(this.getSessionPath(id)).modificationTime ?? 0 } catch { return 0 } })(),
+                }))
+            if (entries.length <= MAX_CHATS_PER_CHARACTER) return
             entries
                 .filter((item) => item.id !== keepChatId)
                 .sort((a, b) => a.modified - b.modified)
-                .slice(0, entries.length - MAX_CHAT_SESSIONS)
+                .slice(0, entries.length - MAX_CHATS_PER_CHARACTER)
                 .forEach((item) => this.deleteChatSession(item.id))
         } catch (e) {
             Logger.warn(`[ChatCacheManager] No se pudo limpiar KV antiguos: ${e}`)
