@@ -1,7 +1,7 @@
 import { useFocusEffect } from 'expo-router'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, ScrollView, Text, TextInput, View } from 'react-native'
+import { BackHandler, Text, TextInput, View } from 'react-native'
 import { useMMKVBoolean, useMMKVNumber } from 'react-native-mmkv'
 import Animated, { Easing, SlideInRight, SlideOutRight } from 'react-native-reanimated'
 import { useShallow } from 'zustand/react/shallow'
@@ -13,8 +13,8 @@ import ThemedSwitch from '@components/input/ThemedSwitch'
 import SectionTitle from '@components/text/SectionTitle'
 import Alert from '@components/views/Alert'
 import { AppSettings, Global } from '@lib/constants/GlobalValues'
-import { chatCacheManager } from '@lib/engine/Local/ChatCacheManager'
 import { Llama } from '@lib/engine/Local/LlamaLocal'
+import { KV } from '@lib/engine/Local/Model'
 import useBackendDevices from '@lib/hooks/BackendDevices'
 import { Logger } from '@lib/state/Logger'
 import { Theme } from '@lib/theme/ThemeManager'
@@ -36,69 +36,66 @@ const deviceLabels: Record<string, string> = {
     RNPU: 'RNPU',
 }
 
+const missingSettingKeys = new Set<string>()
+
+/**
+ * useMMKV* se cierra la app si recibe una clave undefined. Si el enum compilado no trae
+ * un miembro, se usa su valor real como respaldo y se deja constancia en los logs.
+ */
+const settingKey = (value: string | undefined, fallback: string) => {
+    if (value !== undefined) return value
+    if (!missingSettingKeys.has(fallback)) {
+        missingSettingKeys.add(fallback)
+        Logger.error(`ModelSettings: la clave '${fallback}' llegó undefined, se usa el respaldo`)
+    }
+    return fallback
+}
+
 const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoading, exit }) => {
     const { t } = useTranslation()
     const { color, spacing, borderRadius, fontSize } = Theme.useTheme()
-    const { config, setConfig, profiles } =
+    const { config, setConfig, profiles, saveProfile, loadProfile, deleteProfile, renameProfile } =
         Llama.useLlamaPreferencesStore(
             useShallow((state) => ({
                 config: state.config,
                 setConfig: state.setConfiguration,
                 profiles: state.profiles,
+                saveProfile: state.saveProfile,
+                loadProfile: state.loadProfile,
+                deleteProfile: state.deleteProfile,
+                renameProfile: state.renameProfile,
             }))
         )
 
-    // Funciones fuera del useShallow — no deben causar re-renders
-    const saveProfile = Llama.useLlamaPreferencesStore((state) => state.saveProfile)
-    const loadProfile = Llama.useLlamaPreferencesStore((state) => state.loadProfile)
-    const deleteProfile = Llama.useLlamaPreferencesStore((state) => state.deleteProfile)
-    const renameProfile = Llama.useLlamaPreferencesStore((state) => state.renameProfile)
-
     const devices = useBackendDevices()
 
-    const [saveKV, setSaveKV] = useMMKVBoolean(AppSettings.SaveLocalKV)
-    const [autoloadLocal, setAutoloadLocal] = useMMKVBoolean(AppSettings.AutoLoadLocal)
-    const [showModelInChat, setShowModelInChat] = useMMKVBoolean(AppSettings.ShowModelInChat)
-    const [disableLogs, setDisableLogs] = useMMKVBoolean(AppSettings.DisableLogs)
-    const [cachePrompt, setCachePrompt] = useMMKVBoolean(AppSettings.CachePrompt)
-    const [summarizeContext, setSummarizeContext] = useMMKVBoolean(AppSettings.ContextSummarize)
-    const [summaryTrigger, setSummaryTrigger] = useMMKVNumber(AppSettings.SummaryTriggerRatio)
-    const [summaryRecent, setSummaryRecent] = useMMKVNumber(AppSettings.SummaryRecentCount)
-    const [threadCount] = useMMKVNumber(Global.CPUThreads)
+    const [saveKV, setSaveKV] = useMMKVBoolean(settingKey(AppSettings?.SaveLocalKV, 'savelocalkv'))
+    const [autoloadLocal, setAutoloadLocal] = useMMKVBoolean(
+        settingKey(AppSettings?.AutoLoadLocal, 'autoloadlocal')
+    )
+    const [showModelInChat, setShowModelInChat] = useMMKVBoolean(
+        settingKey(AppSettings?.ShowModelInChat, 'showmodelinchat')
+    )
+    const [disableLogs, setDisableLogs] = useMMKVBoolean(
+        settingKey(AppSettings?.DisableLogs, 'settings-disable-logs')
+    )
+    const [cachePrompt, setCachePrompt] = useMMKVBoolean(
+        settingKey(AppSettings?.CachePrompt, 'settings-cache-prompt')
+    )
+    const [threadCount] = useMMKVNumber(settingKey(Global?.CPUThreads, 'constants-cpu-threads'))
 
-    const [chatSessionsSize, setChatSessionsSize] = useState(0)
+    const [kvSize, setKVSize] = useState(0)
     const [newProfileName, setNewProfileName] = useState('')
     const [renamingProfile, setRenamingProfile] = useState<string | null>(null)
     const [renameValue, setRenameValue] = useState('')
 
     useEffect(() => {
-        chatCacheManager.getTotalSize().then(setChatSessionsSize)
+        KV.getKVSize().then(setKVSize)
     }, [])
 
-    const getChatSessionsSize = async () => {
-        const size = await chatCacheManager.getTotalSize()
-        setChatSessionsSize(size)
-    }
-
-    const handleDeleteChatSessions = () => {
-        Alert.alert({
-            title: t('model.alert.deletechatsessions.title'),
-            description: t('model.alert.deletechatsessions.description', {
-                size: readableFileSize(chatSessionsSize),
-            }),
-            buttons: [
-                { label: t('common.actions.cancel') },
-                {
-                    label: t('model.alert.deletechatsessions.title'),
-                    onPress: async () => {
-                        await chatCacheManager.clearAllSessions()
-                        Logger.info(t('model.toast.deletechatsessions'))
-                        getChatSessionsSize()
-                    },
-                    type: 'warning',
-                },
-            ],
-        })
+    const getKVSize = async () => {
+        const size = await KV.getKVSize()
+        setKVSize(size)
     }
 
     const backAction = () => {
@@ -111,11 +108,28 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
         return () => handler.remove()
     })
 
-
+    const handleDeleteKV = () => {
+        Alert.alert({
+            title: t('model.alert.deletekv.title'),
+            description: t('model.alert.deletekv.description', { size: readableFileSize(kvSize) }),
+            buttons: [
+                { label: t('common.actions.delete') },
+                {
+                    label: t('model.alert.deletekv.title'),
+                    onPress: async () => {
+                        await KV.deleteKV()
+                        Logger.info(t('model.toast.deletekv'))
+                        getKVSize()
+                    },
+                    type: 'warning',
+                },
+            ],
+        })
+    }
 
     const handleSaveProfile = () => {
         const name = newProfileName.trim()
-        if (!name || !profiles) return
+        if (!name) return
         if (profiles[name]) {
             Alert.alert({
                 title: 'Sobreescribir perfil',
@@ -153,7 +167,7 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
         })
     }
 
-    const profileNames = profiles ? Object.keys(profiles) : []
+    const profileNames = Object.keys(profiles)
     const disabled = modelImporting || modelLoading
 
     return (
@@ -460,16 +474,16 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
                         step={32}
                         disabled={disabled}
                     />
-                    {/* defrag_thold — se muestra como 0-100 entero, se guarda como 0.01-1.0 */}
+                    {/* defrag_thold — rango continuo 0.0 a 1.0 */}
                     <ThemedSlider
-                        label={`${t('model.defragthold')}: ${((config.defrag_thold ?? 0.02) * 100).toFixed(0)}`}
-                        value={Math.round((config.defrag_thold ?? 0.02) * 100)}
+                        label={t('model.defragthold')}
+                        value={config.defrag_thold}
                         onValueChange={(value) =>
-                            setConfig({ ...config, defrag_thold: value / 100 })
+                            setConfig({ ...config, defrag_thold: Math.round(value * 100) / 100 })
                         }
-                        min={1}
-                        max={100}
-                        step={1}
+                        min={0}
+                        max={1}
+                        step={0.01}
                         disabled={disabled}
                     />
                 </>
@@ -505,42 +519,13 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
                 onChangeValue={setSaveKV}
                 description={saveKV ? '' : t('model.savekvdesc')}
             />
-            <ThemedButton
-                buttonStyle={{ marginTop: 8 }}
-                label={t('model.purgechatsessions', { size: readableFileSize(chatSessionsSize) })}
-                onPress={handleDeleteChatSessions}
-                variant={chatSessionsSize === 0 ? 'disabled' : 'critical'}
-            />
-
-            {/* ── Context Summarizer ── */}
-            <SectionTitle>{t('model.settings.summarizer')}</SectionTitle>
-            <ThemedSwitch
-                label={t('model.summarize')}
-                value={summarizeContext ?? false}
-                onChangeValue={setSummarizeContext}
-                description={t('model.summarizedesc')}
-            />
-            {(summarizeContext ?? false) && (
-                <>
-                    <ThemedSlider
-                        label={t('model.summarizeTrigger')}
-                        value={summaryTrigger !== undefined ? summaryTrigger : 75}
-                        onValueChange={(v) => setSummaryTrigger(v)}
-                        min={50}
-                        max={95}
-                        step={5}
-                        disabled={disabled}
-                    />
-                    <ThemedSlider
-                        label={t('model.summarizeRecent')}
-                        value={summaryRecent !== undefined ? summaryRecent : 8}
-                        onValueChange={(v) => setSummaryRecent(v)}
-                        min={4}
-                        max={20}
-                        step={2}
-                        disabled={disabled}
-                    />
-                </>
+            {saveKV && (
+                <ThemedButton
+                    buttonStyle={{ marginTop: 8 }}
+                    label={t('model.purgekv', { size: readableFileSize(kvSize) })}
+                    onPress={handleDeleteKV}
+                    variant={kvSize === 0 ? 'disabled' : 'critical'}
+                />
             )}
         </Animated.ScrollView>
     )
