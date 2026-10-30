@@ -18,6 +18,7 @@ import {
     chats,
     tags,
 } from '@db/schema'
+import { chatCacheManager } from '@lib/engine/Local/ChatCacheManager'
 import { Tokenizer } from '@lib/engine/Tokenizer'
 import { Storage } from '@lib/enums/Storage'
 import {
@@ -639,6 +640,14 @@ export namespace Characters {
                 })
                 if (data?.image_id) deleteImage(data.image_id)
                 if (data?.background_image) deleteImage(data.background_image)
+
+                // Borrar los KV de todos los chats del personaje antes de eliminar
+                // (la cascade de SQLite borra los chats pero no los archivos .bin/.json)
+                const charChats = await database
+                    .select({ id: chats.id })
+                    .from(chats)
+                    .where(eq(chats.character_id, charID))
+                for (const chat of charChats) chatCacheManager.deleteChatSession(chat.id)
 
                 await database.delete(characters).where(eq(characters.id, charID))
                 await database
