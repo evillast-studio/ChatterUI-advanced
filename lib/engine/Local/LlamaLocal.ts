@@ -16,6 +16,8 @@ import { Storage } from '@lib/enums/Storage'
 import { chatCacheManager } from './ChatCacheManager'
 import { checkGGMLDeprecated } from './GGML'
 import { KV, Model } from './Model'
+import { Characters } from '../../state/Characters'
+import { Chats } from '../../state/Chat'
 import { Logger } from '../../state/Logger'
 import { createMMKVStorage } from '../../storage/MMKV'
 
@@ -411,7 +413,15 @@ export namespace Llama {
             // Tokens que realmente quedaron en el KV (con ctx_shift pueden ser menos que el prompt)
             const promptTokens = (await get().tokenize(prompt, media_paths))?.tokens ?? []
             chatCacheManager.saveTokens(chatId, promptTokens.slice(0, saved))
-            chatCacheManager.pruneOldest(chatId)
+
+            // Obtener los chats del personaje activo para aplicar el límite por personaje
+            const characterId = Characters.useCharacterStore.getState().id
+            if (characterId) {
+                const characterChats = await Chats.db.query.chatList(characterId)
+                const characterChatIds = characterChats?.map((c: { id: number }) => c.id) ?? []
+                chatCacheManager.pruneOldest(chatId, characterChatIds)
+            }
+
             KV.useKVStore.getState().setLoadedChatId(chatId)
 
             Logger.info(
