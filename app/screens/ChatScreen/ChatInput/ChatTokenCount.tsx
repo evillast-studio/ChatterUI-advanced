@@ -9,25 +9,42 @@ import { Chats } from '@lib/state/Chat'
 import { SamplersManager } from '@lib/state/SamplerState'
 import { Theme } from '@lib/theme/ThemeManager'
 
-const ChatTokenCount: React.FC = () => {
-    const { t } = useTranslation()
+/** Umbral a partir del cual se muestra el botón de resumen (90%) */
+export const SUMMARY_THRESHOLD = 0.9
+
+/**
+ * Hook compartido para calcular el progreso del contexto.
+ * Lo usan tanto ChatTokenCount (barra) como ChatInput (botón de resumen).
+ */
+export const useContextProgress = () => {
     const { id: chatId } = Chats.useChatState()
     const cardTokenCount = Characters.useCharacterStore(
         (state) => state.tokenCache?.description_length ?? 0
     )
     const { data } = useLiveQueryJoined(Chats.db.live.tokenCount(chatId ?? -1))
-    const { color, fontSize } = Theme.useTheme()
     const sampler = SamplersManager.useCurrentSampler()
 
     const tokenCount = parseFloat(data?.[0]?.totalTokens ?? '0') + cardTokenCount
-
     const maxLength = sampler?.data?.[SamplerID.CONTEXT_LENGTH] ?? 1024
-
     const progress = Math.min(1, Math.max(0, tokenCount / maxLength))
+
+    return {
+        tokenCount,
+        maxLength,
+        progress,
+        nearLimit: progress >= SUMMARY_THRESHOLD,
+    }
+}
+
+const ChatTokenCount: React.FC = () => {
+    const { t } = useTranslation()
+    const { tokenCount, maxLength, progress } = useContextProgress()
+    const { color, fontSize } = Theme.useTheme()
+
     const leftover = maxLength - tokenCount
     const warning = leftover < Math.min(2048, 0.25 * maxLength)
-
     const genLengthColor = warning ? color.error._300 : color.primary._500
+
     return (
         <View style={{ paddingHorizontal: 8, paddingTop: 4, paddingBottom: 8 }}>
             <Text style={{ color: color.text._300, paddingBottom: 2, marginLeft: 4 }}>
