@@ -474,16 +474,17 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
                         step={32}
                         disabled={disabled}
                     />
-                    {/* defrag_thold — rango continuo 0.0 a 1.0 */}
+                    {/* defrag_thold: slider 0–100 (enteros) → valor real 0.00–1.00
+                         RN en Android no soporta step decimal, se escala */}
                     <ThemedSlider
-                        label={t('model.defragthold')}
-                        value={config.defrag_thold}
+                        label={`${t('model.defragthold')} (${config.defrag_thold.toFixed(2)})`}
+                        value={Math.round(config.defrag_thold * 100)}
                         onValueChange={(value) =>
-                            setConfig({ ...config, defrag_thold: Math.round(value * 100) / 100 })
+                            setConfig({ ...config, defrag_thold: value / 100 })
                         }
                         min={0}
-                        max={1}
-                        step={0.01}
+                        max={100}
+                        step={1}
                         disabled={disabled}
                     />
                 </>
