@@ -5,7 +5,7 @@ import { launchImageLibraryAsync, requestMediaLibraryPermissionsAsync } from 'ex
 import { router } from 'expo-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Keyboard, Pressable, TextInput, TouchableOpacity, View } from 'react-native'
+import { Keyboard, Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useMMKVBoolean } from 'react-native-mmkv'
 import Animated, {
     BounceIn,
@@ -34,6 +34,7 @@ import { Logger } from '@lib/state/Logger'
 import { Theme } from '@lib/theme/ThemeManager'
 
 import ChatOptions from './ChatInputOptions'
+import { useContextProgress } from './ChatTokenCount'
 
 export type Attachment = {
     uri: string
@@ -93,6 +94,30 @@ const ChatInput = () => {
     const abortResponse = async () => {
         Logger.info(t('chat.input.errors.abortGeneration'))
         if (abortFunction) await abortFunction()
+    }
+
+    const { nearLimit } = useContextProgress()
+
+    const handleSummarize = async () => {
+        if (!chatId) return
+        Keyboard.dismiss()
+        setDisableSend(true)
+        try {
+            await Chats.db.mutate.createEntry(
+                chatId,
+                userName ?? '',
+                true,
+                '[Por favor, haz un resumen conciso de toda la conversación hasta ahora, incluyendo los puntos clave, decisiones tomadas y el estado actual. El resumen debe ser claro y detallado para poder continuar desde donde lo dejamos.]'
+            )
+            const result = await Chats.db.mutate.createEntry(chatId, charName ?? '', false, '')
+            const swipeId = result?.swipes?.[0]?.id
+            if (swipeId) generateResponse(swipeId)
+        } catch (e) {
+            Logger.errorToast(t('chat.input.errors.failedToSend'))
+            Logger.error(e)
+        } finally {
+            setDisableSend(false)
+        }
     }
 
     const handleSend = async () => {
@@ -191,6 +216,32 @@ const ChatInput = () => {
                 borderRadius: 16,
                 rowGap: spacing.m,
             }}>
+            {nearLimit && !nowGenerating && (
+                <Animated.View entering={FadeIn} exiting={FadeOut}>
+                    <TouchableOpacity
+                        onPress={handleSummarize}
+                        disabled={disableSend}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            columnGap: 6,
+                            paddingVertical: 6,
+                            paddingHorizontal: 12,
+                            backgroundColor: color.error._300 + '22',
+                            borderWidth: 1,
+                            borderColor: color.error._300,
+                            borderRadius: 12,
+                            opacity: disableSend ? 0.5 : 1,
+                            marginBottom: 4,
+                        }}>
+                        <MaterialIcons name="compress" size={16} color={color.error._300} />
+                        <Text style={{ color: color.error._300, fontSize: 13, fontWeight: '600' }}>
+                            Resumir conversación
+                        </Text>
+                    </TouchableOpacity>
+                </Animated.View>
+            )}
             <Animated.FlatList
                 itemLayoutAnimation={LinearTransition}
                 style={{
