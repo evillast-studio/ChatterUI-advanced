@@ -30,6 +30,7 @@ import { useUnfocusTextInput } from '@lib/hooks/UnfocusTextInput'
 import { Characters } from '@lib/state/Characters'
 import { Chats, useInference } from '@lib/state/Chat'
 import { useChatInputTextStore } from '@lib/state/components/ChatInput'
+import { useImageViewerStore } from '@lib/state/components/ImageViewer'
 import { Logger } from '@lib/state/Logger'
 import { Theme } from '@lib/theme/ThemeManager'
 
@@ -97,6 +98,7 @@ const ChatInput = () => {
     }
 
     const { nearLimit } = useContextProgress()
+    const openImage = useImageViewerStore((state) => state.open)
 
     const handleSummarize = async () => {
         if (!chatId) return
@@ -201,9 +203,7 @@ const ChatInput = () => {
                 bottom: 4,
                 paddingVertical: spacing.sm,
                 paddingHorizontal: spacing.sm,
-                backgroundColor: color.neutral._100 + 'cc',
-                borderWidth: 1,
-                borderColor: color.neutral._200,
+                backgroundColor: color.neutral._200 + 'f0',
                 boxShadow: [
                     {
                         offsetX: 1,
@@ -213,7 +213,7 @@ const ChatInput = () => {
                         blurRadius: 4,
                     },
                 ],
-                borderRadius: 16,
+                borderRadius: borderRadius.xl2,
                 rowGap: spacing.m,
             }}>
             {nearLimit && !nowGenerating && (
@@ -231,7 +231,7 @@ const ChatInput = () => {
                             backgroundColor: color.error._300 + '22',
                             borderWidth: 1,
                             borderColor: color.error._300,
-                            borderRadius: 12,
+                            borderRadius: borderRadius.full,
                             opacity: disableSend ? 0.5 : 1,
                             marginBottom: 4,
                         }}>
@@ -247,8 +247,8 @@ const ChatInput = () => {
                 style={{
                     display: attachments.length > 0 ? 'flex' : 'none',
                     padding: spacing.l,
-                    backgroundColor: color.neutral._200,
-                    borderRadius: borderRadius.m,
+                    backgroundColor: color.neutral._300,
+                    borderRadius: borderRadius.xl,
                 }}
                 horizontal
                 contentContainerStyle={{ columnGap: spacing.xl }}
@@ -260,17 +260,17 @@ const ChatInput = () => {
                             entering={BounceIn}
                             exiting={ZoomOut.duration(100)}
                             style={{ alignItems: 'center', rowGap: 8 }}>
-                            <Image
-                                source={{ uri: item.uri }}
-                                style={{
-                                    width: 128,
-                                    height: undefined,
-                                    aspectRatio: 1,
-                                    borderRadius: borderRadius.m,
-                                    borderWidth: 1,
-                                    borderColor: color.primary._500,
-                                }}
-                            />
+                            <Pressable onPress={() => openImage(item.uri)}>
+                                <Image
+                                    source={{ uri: item.uri }}
+                                    style={{
+                                        width: 128,
+                                        height: undefined,
+                                        aspectRatio: 1,
+                                        borderRadius: borderRadius.xl,
+                                    }}
+                                />
+                            </Pressable>
 
                             <ThemedButton
                                 iconName="close"
@@ -347,8 +347,8 @@ const ChatInput = () => {
                                 triggerStyle={{
                                     color: color.text._400,
                                     padding: 6,
-                                    backgroundColor: color.neutral._200,
-                                    borderRadius: 16,
+                                    backgroundColor: color.neutral._300,
+                                    borderRadius: borderRadius.full,
                                     opacity: activeProvider ? 1 : 0.5,
                                 }}
                                 placement="top"
@@ -364,8 +364,8 @@ const ChatInput = () => {
                                 }}
                                 buttonStyle={{
                                     padding: 5,
-                                    backgroundColor: color.neutral._200,
-                                    borderRadius: 32,
+                                    backgroundColor: color.neutral._300,
+                                    borderRadius: borderRadius.full,
                                 }}
                                 variant="tertiary"
                                 iconName="right"
@@ -381,10 +381,9 @@ const ChatInput = () => {
                         color: color.text._100,
                         backgroundColor: color.neutral._100,
                         flex: 1,
-                        borderWidth: 2,
-                        borderColor: activeProvider ? color.primary._300 : color.primary._100,
-                        borderRadius: borderRadius.l,
-                        paddingHorizontal: spacing.m,
+                        opacity: activeProvider ? 1 : 0.6,
+                        borderRadius: borderRadius.xl2,
+                        paddingHorizontal: spacing.xl,
                         paddingVertical: spacing.m,
                     }}
                     onPress={() => {
@@ -413,7 +412,7 @@ const ChatInput = () => {
                     <TouchableOpacity
                         disabled={disableSend || !chatId || !activeProvider}
                         style={{
-                            borderRadius: borderRadius.m,
+                            borderRadius: borderRadius.full,
                             backgroundColor: !activeProvider
                                 ? color.neutral._100
                                 : nowGenerating
