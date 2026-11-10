@@ -256,7 +256,6 @@ const cleanupChatKV = async () => {
 }
 
 export const startupApp = () => {
-    console.log('[APP STARTED]: T1APT')
     // DEV: Needed for Reset
     //Chats.useChatState.getState().reset()
     //Characters.useCharacterCard.getState().unloadCard()
@@ -288,7 +287,10 @@ export const startupApp = () => {
 
     // Local Model Data in case external models are deleted
     Model.verifyModelList()
-    Tokenizer.useTokenizerState.getState().loadModel()
+    // El tokenizer de respaldo solo hace falta en modo remoto; en local se carga al primer uso
+    if (useAppModeStore.getState().appMode === 'remote') {
+        Tokenizer.useTokenizerState.getState().loadModel()
+    }
 
     // Fix any missing samplers
     SamplersManager.useSamplerStore.getState().fixConfigs()
