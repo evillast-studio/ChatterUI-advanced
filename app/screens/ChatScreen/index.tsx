@@ -8,6 +8,7 @@ import { useShallow } from 'zustand/react/shallow'
 
 import ThemedButton from '@components/buttons/ThemedButton'
 import AvatarViewer from '@components/views/AvatarViewer'
+import ImageViewer from '@components/views/ImageViewer'
 import Drawer from '@components/views/Drawer'
 import HeaderButton from '@components/views/HeaderButton'
 import HeaderTitle from '@components/views/HeaderTitle'
@@ -165,6 +166,7 @@ const ChatScreen = () => {
                         )}
                         <ChatInput />
                         <AvatarViewer />
+                        <ImageViewer />
                         <ChatEditor />
                         <AuthorNoteSheet />
                         <AuthorNoteEditor />
