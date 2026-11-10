@@ -45,11 +45,9 @@ const useButtonTheme = (variant: ButtonVariant): ButtonTheme => {
             return {
                 buttonStyle: {
                     backgroundColor: theme.color.primary._500,
-                    borderColor: theme.color.primary._200,
-                    borderWidth: theme.borderWidth.m,
                     paddingVertical: theme.spacing.m,
                     paddingHorizontal: theme.spacing.xl,
-                    borderRadius: theme.borderRadius.m,
+                    borderRadius: theme.borderRadius.full,
                 },
                 labelStyle: {
                     textAlign: 'center',
@@ -59,15 +57,14 @@ const useButtonTheme = (variant: ButtonVariant): ButtonTheme => {
         case 'secondary':
             return {
                 buttonStyle: {
-                    borderColor: theme.color.primary._400,
-                    borderWidth: theme.borderWidth.m,
+                    backgroundColor: theme.color.primary._300,
                     paddingVertical: theme.spacing.m,
                     paddingHorizontal: theme.spacing.xl,
-                    borderRadius: theme.borderRadius.m,
+                    borderRadius: theme.borderRadius.full,
                 },
                 labelStyle: {
                     textAlign: 'center',
-                    color: theme.color.primary._700,
+                    color: theme.color.text._100,
                 },
             }
         case 'tertiary':
@@ -88,7 +85,7 @@ const useButtonTheme = (variant: ButtonVariant): ButtonTheme => {
                     borderWidth: theme.borderWidth.m,
                     paddingVertical: theme.spacing.m,
                     paddingHorizontal: theme.spacing.xl,
-                    borderRadius: theme.borderRadius.m,
+                    borderRadius: theme.borderRadius.full,
                 },
                 labelStyle: {
                     textAlign: 'center',
@@ -98,15 +95,14 @@ const useButtonTheme = (variant: ButtonVariant): ButtonTheme => {
         case 'disabled':
             return {
                 buttonStyle: {
-                    borderColor: theme.color.neutral._500,
-                    borderWidth: theme.borderWidth.m,
+                    backgroundColor: theme.color.neutral._300,
                     paddingVertical: theme.spacing.m,
                     paddingHorizontal: theme.spacing.xl,
-                    borderRadius: theme.borderRadius.m,
+                    borderRadius: theme.borderRadius.full,
                 },
                 labelStyle: {
                     textAlign: 'center',
-                    color: theme.color.neutral._500,
+                    color: theme.color.text._700,
                 },
             }
     }
