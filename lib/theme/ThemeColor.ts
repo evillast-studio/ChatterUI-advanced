@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { MATERIAL_YOU_BASE_SEED, materialYouSchemes } from './MaterialYou'
+
 const hexColorSchema = z.string().regex(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, {
     message: 'Invalid color format. Use #RGB or #RRGGBB.',
 })
@@ -336,5 +338,18 @@ export namespace DefaultColorSchemes {
         shadow: '#000000',
     }
 
-    export const schemes = [lavenderDark, lavenderLight, amoled, navyDark, hotPink, retroGreen]
+    const materialYou = materialYouSchemes(MATERIAL_YOU_BASE_SEED)
+    export const materialYouDark: ThemeColor = materialYou.dark
+    export const materialYouLight: ThemeColor = materialYou.light
+
+    export const schemes = [
+        materialYouDark,
+        materialYouLight,
+        lavenderDark,
+        lavenderLight,
+        amoled,
+        navyDark,
+        hotPink,
+        retroGreen,
+    ]
 }
