@@ -2,11 +2,10 @@ import { useTranslation } from 'react-i18next'
 import { View, Text } from 'react-native'
 import { Bar } from 'react-native-progress'
 
-import { SamplerID } from '@lib/constants/SamplerData'
+import { useContextLimit } from '@lib/hooks/ContextLimit'
 import { useLiveQueryJoined } from '@lib/hooks/LiveQueryJoined'
 import { Characters } from '@lib/state/Characters'
 import { Chats } from '@lib/state/Chat'
-import { SamplersManager } from '@lib/state/SamplerState'
 import { Theme } from '@lib/theme/ThemeManager'
 
 /** Umbral a partir del cual se muestra el botón de resumen (90%) */
@@ -22,10 +21,10 @@ export const useContextProgress = () => {
         (state) => state.tokenCache?.description_length ?? 0
     )
     const { data } = useLiveQueryJoined(Chats.db.live.tokenCount(chatId ?? -1))
-    const sampler = SamplersManager.useCurrentSampler()
+    // Límite real según el modo: Max Context del modelo en local, sampler/API en remoto
+    const maxLength = useContextLimit()
 
     const tokenCount = parseFloat(data?.[0]?.totalTokens ?? '0') + cardTokenCount
-    const maxLength = sampler?.data?.[SamplerID.CONTEXT_LENGTH] ?? 1024
     const progress = Math.min(1, Math.max(0, tokenCount / maxLength))
 
     return {
