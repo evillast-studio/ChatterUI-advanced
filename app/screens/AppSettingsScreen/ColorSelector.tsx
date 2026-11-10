@@ -15,6 +15,7 @@ import HeaderButton from '@components/views/HeaderButton'
 import HeaderTitle from '@components/views/HeaderTitle'
 import InputSheet from '@components/views/InputSheet'
 import { Logger } from '@lib/state/Logger'
+import { isValidSeed, MATERIAL_YOU_SEEDS, materialYouNames, seedLabel } from '@lib/theme/MaterialYou'
 import { DefaultColorSchemes, ThemeColor } from '@lib/theme/ThemeColor'
 import { Theme } from '@lib/theme/ThemeManager'
 import { pickJSONDocument } from '@lib/utils/File'
@@ -48,6 +49,7 @@ const ColorThemeItem: React.FC<ColorThemeItemProps> = ({ item, index, showDelete
             removeColorScheme: state.removeColorScheme,
         }))
     )
+    const { borderRadius } = Theme.useTheme()
     const systemTheme = useColorScheme()
     const activeColor = systemDark ? (systemTheme === 'dark' ? darkColor : lightColor) : color
 
@@ -89,7 +91,7 @@ const ColorThemeItem: React.FC<ColorThemeItemProps> = ({ item, index, showDelete
                     backgroundColor: item.neutral._100,
                     paddingHorizontal: 16,
                     paddingVertical: 12,
-                    borderRadius: 8,
+                    borderRadius: borderRadius.xl,
                     columnGap: 8,
                     flex: 1,
                     alignItems: 'center',
@@ -109,7 +111,7 @@ const ColorThemeItem: React.FC<ColorThemeItemProps> = ({ item, index, showDelete
                         style={{
                             padding: 8,
                             backgroundColor: item.primary._500,
-                            borderRadius: 24,
+                            borderRadius: borderRadius.full,
                         }}
                     />
                     <Text style={{ color: item.text._100, flex: 1 }} ellipsizeMode="tail">
@@ -122,7 +124,7 @@ const ColorThemeItem: React.FC<ColorThemeItemProps> = ({ item, index, showDelete
                                 borderColor: item.neutral._300,
                                 borderWidth: 2,
                                 paddingHorizontal: 8,
-                                borderRadius: 8,
+                                borderRadius: borderRadius.full,
                             }}>
                             {t('settings.colors.active')}
                         </Text>
@@ -152,7 +154,7 @@ const ColorThemeItem: React.FC<ColorThemeItemProps> = ({ item, index, showDelete
                             borderWidth: 1,
                             backgroundColor: activeColor.neutral._100,
                             paddingHorizontal: 12,
-                            borderRadius: 8,
+                            borderRadius: borderRadius.xl,
                             justifyContent: 'center',
                         }}
                         onPress={() => {
@@ -176,7 +178,7 @@ const ColorThemeItem: React.FC<ColorThemeItemProps> = ({ item, index, showDelete
                             borderWidth: 1,
                             backgroundColor: activeColor.neutral._100,
                             paddingHorizontal: 12,
-                            borderRadius: 8,
+                            borderRadius: borderRadius.xl,
                             justifyContent: 'center',
                         }}
                         onPress={() => {
@@ -195,6 +197,97 @@ const ColorThemeItem: React.FC<ColorThemeItemProps> = ({ item, index, showDelete
                     </TouchableOpacity>
                 </>
             )}
+        </View>
+    )
+}
+
+const SWATCH_SIZE = 44
+
+const MaterialYouPicker: React.FC = () => {
+    const { t } = useTranslation()
+    const { color, spacing, borderRadius, fontSize } = Theme.useTheme()
+    const systemTheme = useColorScheme()
+    const { darkColor, applyMaterialYou } = Theme.useColorState(
+        useShallow((state) => ({
+            darkColor: state.darkColor,
+            applyMaterialYou: state.applyMaterialYou,
+        }))
+    )
+    const inputRef = useBottomSheetRef()
+
+    const apply = (seed: string) => {
+        applyMaterialYou(seed)
+        const state = Theme.useColorState.getState()
+        const active = state.useSystemDarkMode
+            ? systemTheme === 'dark'
+                ? state.darkColor
+                : state.lightColor
+            : state.color
+        setBackgroundColorAsync(active.neutral._100)
+    }
+
+    const handleCustomSeed = (text: string) => {
+        if (!isValidSeed(text)) {
+            Logger.errorToast(t('settings.colors.materialYou.invalid'))
+            return
+        }
+        apply(seedLabel(text))
+    }
+
+    return (
+        <View style={{ rowGap: spacing.m, paddingBottom: spacing.xl }}>
+            <Text style={{ color: color.text._100, fontSize: fontSize.l, fontWeight: '600' }}>
+                {t('settings.colors.materialYou.title')}
+            </Text>
+            <Text style={{ color: color.text._400, fontSize: fontSize.m }}>
+                {t('settings.colors.materialYou.description')}
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.l }}>
+                {MATERIAL_YOU_SEEDS.map((seed) => {
+                    const selected = materialYouNames(seed.hex).dark === darkColor.name
+                    return (
+                        <TouchableOpacity
+                            key={seed.hex}
+                            accessibilityLabel={seed.name}
+                            onPress={() => apply(seed.hex)}
+                            style={{
+                                width: SWATCH_SIZE,
+                                height: SWATCH_SIZE,
+                                borderRadius: borderRadius.full,
+                                borderWidth: selected ? 3 : 0,
+                                borderColor: color.text._100,
+                                padding: selected ? 3 : 0,
+                            }}>
+                            <View
+                                style={{
+                                    flex: 1,
+                                    borderRadius: borderRadius.full,
+                                    backgroundColor: seed.hex,
+                                }}
+                            />
+                        </TouchableOpacity>
+                    )
+                })}
+                <TouchableOpacity
+                    onPress={() => inputRef.current?.open()}
+                    style={{
+                        height: SWATCH_SIZE,
+                        paddingHorizontal: spacing.xl,
+                        borderRadius: borderRadius.full,
+                        backgroundColor: color.neutral._300,
+                        justifyContent: 'center',
+                    }}>
+                    <Text style={{ color: color.text._100 }}>
+                        {t('settings.colors.materialYou.other')}
+                    </Text>
+                </TouchableOpacity>
+            </View>
+            <InputSheet
+                ref={inputRef}
+                onConfirm={handleCustomSeed}
+                title={t('settings.colors.materialYou.otherTitle')}
+                placeholder="#6750A4"
+            />
         </View>
     )
 }
@@ -282,6 +375,7 @@ const ColorSelector = () => {
             <FlatList
                 style={{ flex: 1 }}
                 contentContainerStyle={{ rowGap: 8 }}
+                ListHeaderComponent={<MaterialYouPicker />}
                 data={[...DefaultColorSchemes.schemes, ...customColors]}
                 keyExtractor={(item) => item.name}
                 renderItem={({ item, index }) => (
