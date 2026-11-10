@@ -17,14 +17,20 @@ type TokenizerState = {
 
 const tokenizerModelDir = `${AppDirectory.Assets}llama3tokenizer.gguf`
 
+/** Carga en curso: evita crear dos contextos si varios piden el tokenizer a la vez. */
+let loadingTokenizer: Promise<void> | undefined
+
 export namespace Tokenizer {
     export const useTokenizerState = create<TokenizerState>()((set, get) => ({
         model: undefined,
         tokenize: async (text: string) => {
-            return (await get()?.model?.tokenize(text))?.tokens ?? []
+            if (!get().model) await get().loadModel()
+            return (await get().model?.tokenize(text))?.tokens ?? []
         },
         // name this for trace stack
         getTokenCount: async function getTokenCount(text: string, image_urls: string[] = []) {
+            // Se carga bajo demanda: en modo local casi nunca hace falta
+            if (!get().model) await get().loadModel()
             const model = get().model
             if (!model) {
                 Logger.warn('Tokenizer not loaded')
@@ -34,20 +40,25 @@ export namespace Tokenizer {
         },
         loadModel: async () => {
             if (get().model) return
-            try {
-                await importModelFromRes()
-                Logger.info('Loading Tokenizer')
-                const context = await initLlama({
-                    model: tokenizerModelDir,
-                    vocab_only: true,
-                    n_gpu_layers: 0,
-                    devices: ['CPU'],
-                })
-                Logger.info('Tokenizer Loaded')
-                set({ model: context })
-            } catch (e) {
-                Logger.error('Failed to load tokenizer: ' + e)
-            }
+            loadingTokenizer ??= (async () => {
+                try {
+                    await importModelFromRes()
+                    Logger.info('Loading Tokenizer')
+                    const context = await initLlama({
+                        model: tokenizerModelDir,
+                        vocab_only: true,
+                        n_gpu_layers: 0,
+                        devices: ['CPU'],
+                    })
+                    Logger.info('Tokenizer Loaded')
+                    set({ model: context })
+                } catch (e) {
+                    Logger.error('Failed to load tokenizer: ' + e)
+                } finally {
+                    loadingTokenizer = undefined
+                }
+            })()
+            await loadingTokenizer
         },
     }))
 
