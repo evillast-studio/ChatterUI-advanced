@@ -383,19 +383,17 @@ const MenuList = ({
 }
 
 const useStyles = () => {
-    const { color } = Theme.useTheme()
+    const { color, borderRadius } = Theme.useTheme()
     return StyleSheet.create({
         menuContainer: {
             position: 'absolute',
-            borderRadius: 8,
+            borderRadius: borderRadius.l,
         },
         menu: {
-            backgroundColor: color.neutral._200,
+            backgroundColor: color.neutral._300,
             minWidth: CONTEXT_MENU_MIN_WIDTH,
-            borderColor: color.neutral._400,
-            borderWidth: 1,
             padding: 4,
-            borderRadius: 8,
+            borderRadius: borderRadius.l,
             overflow: 'hidden',
         },
         menuItem: {
@@ -412,7 +410,7 @@ const useStyles = () => {
         menuTextError: {
             color: color.error._300,
         },
-        border: { borderTopWidth: 2, borderColor: color.neutral._400, marginVertical: 4 },
+        border: { borderTopWidth: 2, borderColor: color.neutral._500, marginVertical: 4 },
     })
 }
 

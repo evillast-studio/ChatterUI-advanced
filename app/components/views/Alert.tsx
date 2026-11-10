@@ -89,7 +89,7 @@ const useStyles = () => {
             paddingHorizontal: spacing.xl2,
             paddingBottom: spacing.xl,
             paddingTop: spacing.xl2,
-            borderRadius: borderRadius.xl,
+            borderRadius: borderRadius.xl2,
             width: '90%',
         },
 
