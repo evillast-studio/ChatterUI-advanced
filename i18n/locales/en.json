@@ -875,6 +875,13 @@
         "colorNameAlreadyUsed": "Color Name Already Used",
         "failedToImport": "Failed to import: {{error}}"
       },
+      "materialYou": {
+        "description": "Pick a base color. Dark and light themes are generated from it.",
+        "invalid": "Invalid color. Use a hex value like #6750A4",
+        "other": "Other",
+        "otherTitle": "Base color (hex, e.g. #6750A4)",
+        "title": "Material You"
+      },
       "pasteThemeTitle": "Paste Theme Here",
       "title": "Themes",
       "useSystemDarkMode": "Use System Dark Mode"
