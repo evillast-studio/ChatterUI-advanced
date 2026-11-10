@@ -21,7 +21,7 @@ const ThemedTextInput: React.FC<ThemedTextInputProps> = ({
     containerStyle = {},
     ...rest
 }) => {
-    const { color } = Theme.useTheme()
+    const { color, borderRadius } = Theme.useTheme()
     const ref = useUnfocusTextInput()
 
     return (
@@ -46,11 +46,11 @@ const ThemedTextInput: React.FC<ThemedTextInputProps> = ({
                 style={[
                     {
                         color: color.text._100,
-                        borderColor: color.neutral._400,
+                        borderColor: color.neutral._500,
                         borderWidth: 1,
                         paddingVertical: 8,
                         paddingHorizontal: 12,
-                        borderRadius: 8,
+                        borderRadius: borderRadius.l,
                         textAlignVertical: numberOfLines && numberOfLines > 1 ? `top` : `center`,
                     },
                     style,

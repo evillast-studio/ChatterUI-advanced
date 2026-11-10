@@ -26,17 +26,23 @@ const ThemedSlider: React.FC<ThemedSliderProps> = ({
     min = 0,
     max = 1,
     step = 0,
-    precision = 0,
+    precision,
     showInput = true,
     disabled = false,
 }) => {
+    const resolvedPrecision =
+        precision !== undefined
+            ? precision
+            : step > 0 && step < 1
+              ? Math.max(0, -Math.floor(Math.log10(step)))
+              : 0
     const styles = useStyles()
     const { color } = Theme.useTheme()
     const [textValue, setTextValue] = useState(value.toString())
 
     const clampSlider = useCallback(
-        (value: number) => clamp(value, min, max, precision),
-        [min, max, precision]
+        (value: number) => clamp(value, min, max, resolvedPrecision),
+        [min, max, resolvedPrecision]
     )
 
     const handleSliderChange = (v: number) => {
@@ -53,7 +59,7 @@ const ThemedSlider: React.FC<ThemedSliderProps> = ({
 
     const handleEndEdit = () => {
         const v = parseFloat(textValue)
-        if (!isNaN(v)) onValueChange(clamp(v, min, max, precision))
+        if (!isNaN(v)) onValueChange(clamp(v, min, max, resolvedPrecision))
         setTextValue(clampSlider(value).toString())
     }
 
@@ -71,8 +77,8 @@ const ThemedSlider: React.FC<ThemedSliderProps> = ({
                     maximumValue={max}
                     value={value}
                     onSlidingComplete={handleSliderChange}
-                    minimumTrackTintColor={color.primary._400}
-                    maximumTrackTintColor={color.neutral._600}
+                    minimumTrackTintColor={color.primary._500}
+                    maximumTrackTintColor={color.primary._300}
                     thumbTintColor={color.primary._500}
                 />
                 {showInput && (
@@ -87,7 +93,7 @@ const ThemedSlider: React.FC<ThemedSliderProps> = ({
                         ]}
                         value={textValue}
                         onChangeText={handleTextInputChange}
-                        keyboardType="number-pad"
+                        keyboardType="decimal-pad"
                         submitBehavior="blurAndSubmit"
                         multiline
                         numberOfLines={1}
@@ -104,7 +110,7 @@ const ThemedSlider: React.FC<ThemedSliderProps> = ({
 export default ThemedSlider
 
 const useStyles = () => {
-    const { color, spacing } = Theme.useTheme()
+    const { color, borderRadius } = Theme.useTheme()
     return StyleSheet.create({
         itemName: {
             color: color.text._100,
@@ -126,7 +132,7 @@ const useStyles = () => {
         textBox: {
             color: color.text._100,
             borderWidth: 1,
-            borderRadius: spacing.l,
+            borderRadius: borderRadius.l,
             textAlign: `center`,
         },
     })

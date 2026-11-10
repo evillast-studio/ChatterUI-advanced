@@ -35,7 +35,7 @@ const HorizontalSelector = <T,>({
     description,
     style,
 }: HorizontalSelectorProps<T>) => {
-    const { color, spacing, fontSize } = Theme.useTheme()
+    const { color, spacing, fontSize, borderRadius } = Theme.useTheme()
     const viewRef = useRef<View>(null)
     const initialRender = useRef(true)
     const animatedValues = useSharedValue({
@@ -82,17 +82,16 @@ const HorizontalSelector = <T,>({
                     flex: style?.flex ?? 1,
                     flexDirection: 'row',
                     justifyContent: 'space-evenly',
-                    borderColor: color.primary._200,
-                    backgroundColor: color.neutral._100,
+                    borderColor: color.neutral._500,
                     borderWidth: 2,
-                    borderRadius: 8,
+                    borderRadius: borderRadius.full,
                 }}>
                 <Animated.View
                     style={[
                         {
                             position: 'absolute',
                             backgroundColor: color.primary._300,
-                            borderRadius: 8,
+                            borderRadius: borderRadius.full,
                         },
                         animatedStyle,
                     ]}
