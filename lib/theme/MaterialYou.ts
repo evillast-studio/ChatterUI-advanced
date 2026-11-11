@@ -90,7 +90,11 @@ const colorAt = (tone: number, chroma: number, hue: number) => {
 /** Croma de Lab que corresponde al croma 36 de Material 3 para la paleta primaria (decrece con el tono). */
 const primaryChroma = (tone: number) => Math.max(0, 63.5 - 0.335 * tone)
 const TERTIARY_CHROMA = 21
-const NEUTRAL_CHROMA = 4.5
+/** Las superficies del tema claro llevan más color: con 4.5 se ven grises (Material 3 expresivo). */
+const NEUTRAL_CHROMA_DARK = 4.5
+const NEUTRAL_CHROMA_LIGHT = 11
+/** Los textos principales conservan un tinte suave en ambos temas. */
+const ON_SURFACE_CHROMA = 4.5
 const NEUTRAL_VARIANT_CHROMA = 6.8
 /** Material 3 rota 60° el matiz para la paleta terciaria (equivale a ~54° en CIELAB). */
 const TERTIARY_HUE_SHIFT = 54
@@ -126,17 +130,20 @@ const errorAt = (tone: number) => {
 type Palettes = {
     primary: (tone: number) => string
     neutral: (tone: number) => string
+    onSurface: (tone: number) => string
     neutralVariant: (tone: number) => string
     tertiary: (tone: number) => string
     error: (tone: number) => string
 }
 
-const palettesFor = (seed: string): Palettes => {
+const palettesFor = (seed: string, mode: 'dark' | 'light'): Palettes => {
     const [, a, b] = hexToLab(seed)
     const hue = (Math.atan2(b, a) * 180) / Math.PI
     return {
         primary: (tone) => colorAt(tone, primaryChroma(tone), hue),
-        neutral: (tone) => colorAt(tone, NEUTRAL_CHROMA, hue),
+        neutral: (tone) =>
+            colorAt(tone, mode === 'dark' ? NEUTRAL_CHROMA_DARK : NEUTRAL_CHROMA_LIGHT, hue),
+        onSurface: (tone) => colorAt(tone, ON_SURFACE_CHROMA, hue),
         neutralVariant: (tone) => colorAt(tone, NEUTRAL_VARIANT_CHROMA, hue),
         tertiary: (tone) => colorAt(tone, TERTIARY_CHROMA, hue + TERTIARY_HUE_SHIFT),
         error: errorAt,
@@ -175,12 +182,12 @@ const LIGHT = {
 } satisfies Record<string, Tones>
 
 const buildScheme = (seed: string, mode: 'dark' | 'light', name: string): ThemeColor => {
-    const palettes = palettesFor(seed)
+    const palettes = palettesFor(seed, mode)
     const tones = mode === 'dark' ? DARK : LIGHT
     // onSurface (los textos más intensos) usa la paleta neutra; el resto, la neutra variante
     const isOnSurface = (tone: number) => (mode === 'dark' ? tone >= 85 : tone <= 25)
     const textAt = (tone: number) =>
-        isOnSurface(tone) ? palettes.neutral(tone) : palettes.neutralVariant(tone)
+        isOnSurface(tone) ? palettes.onSurface(tone) : palettes.neutralVariant(tone)
     return {
         version: 1,
         name,
