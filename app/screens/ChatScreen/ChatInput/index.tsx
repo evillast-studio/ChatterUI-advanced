@@ -381,7 +381,7 @@ const ChatInput = () => {
                         color: color.text._100,
                         backgroundColor: color.neutral._100,
                         flex: 1,
-                        opacity: activeProvider ? 1 : 0.6,
+                        opacity: activeProvider ? 1 : 0.8,
                         borderRadius: borderRadius.xl2,
                         paddingHorizontal: spacing.xl,
                         paddingVertical: spacing.m,
