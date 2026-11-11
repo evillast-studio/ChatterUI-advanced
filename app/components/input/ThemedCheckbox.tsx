@@ -67,7 +67,7 @@ const ThemedCheckbox: React.FC<ThemedCheckboxProps> = ({
                     <Animated.View
                         entering={BounceIn.duration(150)}
                         exiting={ZoomOut.duration(150)}>
-                        <AntDesign name="check" color={theme.color.text._100} size={20} />
+                        <AntDesign name="check" color={theme.color.text._900} size={20} />
                     </Animated.View>
                 )}
                 {!value && (

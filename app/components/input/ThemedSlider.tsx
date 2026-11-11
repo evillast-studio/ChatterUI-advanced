@@ -1,8 +1,9 @@
-import Slider from '@react-native-community/slider'
 import { useCallback, useState } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 
 import { Theme } from '@lib/theme/ThemeManager'
+
+import ThickSlider from './ThickSlider'
 
 type ThemedSliderProps = {
     label: string
@@ -69,17 +70,14 @@ const ThemedSlider: React.FC<ThemedSliderProps> = ({
                 <Text style={disabled ? styles.itemNameDisabled : styles.itemName}>{label}</Text>
             )}
             <View style={styles.sliderContainer}>
-                <Slider
+                <ThickSlider
                     disabled={disabled}
                     style={styles.slider}
                     step={step}
-                    minimumValue={min}
-                    maximumValue={max}
+                    min={min}
+                    max={max}
                     value={value}
                     onSlidingComplete={handleSliderChange}
-                    minimumTrackTintColor={color.primary._500}
-                    maximumTrackTintColor={color.primary._300}
-                    thumbTintColor={color.primary._500}
                 />
                 {showInput && (
                     <TextInput
@@ -126,7 +124,6 @@ const useStyles = () => {
 
         slider: {
             flex: 9,
-            height: 36,
         },
 
         textBox: {
