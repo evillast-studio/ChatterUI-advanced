@@ -276,10 +276,10 @@ export namespace Llama {
                 use_mmap: config.use_mmap,
                 use_mlock: config.use_mlock,
                 n_gpu_layers: config.gpu_layers,
-                // force_gpu_device is passed via devices selection
+                // force_gpu_device: when true, pass the selected devices list; otherwise let llama.rn auto-select
                 devices: config.force_gpu_device && config.devices.length > 0
                     ? config.devices
-                    : config.devices,
+                    : [],
                 cache_type_k: config.cache_type_k,
                 cache_type_v: config.cache_type_v,
                 flash_attn: config.flash_attn,
