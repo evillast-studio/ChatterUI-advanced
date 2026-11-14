@@ -10,7 +10,7 @@ const Avatar: React.FC<FallbackImageProps> = ({ targetImage, ...rest }) => {
             {...rest}
             source={{ uri: targetImage }}
             placeholder={require('@assets/user.png')}
-            cachePolicy="memory"
+            cachePolicy="memory-disk"
             recyclingKey={targetImage}
             placeholderContentFit="contain"
         />
