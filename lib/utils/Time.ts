@@ -7,10 +7,3 @@ export const getFriendlyTimeStamp = (oldtime: number) => {
     return new Date(oldtime).toLocaleDateString()
 }
 
-export async function benchmark<T>(fn: () => T | Promise<T>) {
-    console.log('[Start Benchmark]')
-    const start = performance.now()
-    const result = await fn()
-    console.log('[End Benchmark]', performance.now() - start)
-    return result
-}
