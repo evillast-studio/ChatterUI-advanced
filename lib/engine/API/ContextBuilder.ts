@@ -9,7 +9,7 @@ import { defaultSystemPromptFormat, InstructTokenCache, InstructType } from '@li
 import { Logger } from '@lib/state/Logger'
 import { replaceMacros } from '@lib/state/Macros'
 import { mmkv } from '@lib/storage/MMKV'
-import { readBase64Async } from '@lib/utils/File'
+import { readBase64Async, readStringAsync } from '@lib/utils/File'
 import { Macro } from '@lib/utils/Macros'
 
 import { APIConfiguration, APIValues } from './APIBuilder.types'
@@ -168,7 +168,22 @@ export const collectContext = async (params: ContextBuilderParams & { mode: 'cha
 
         const role: 'user' | 'assistant' = message.is_user ? 'user' : 'assistant'
 
-        const content = replaceMacrosInternal(`${timestamp}${name}${swipe.swipe}`, instruct)
+        // Read text documents and append their content inline
+        const textDocs = message.attachments.filter((item) => item.type === 'document')
+        let docBlock = ''
+        for (const doc of textDocs) {
+            try {
+                const text = await readStringAsync(doc.uri)
+                docBlock += `\n\`\`\`${doc.name}\n${text}\n\`\`\``
+            } catch (e) {
+                Logger.warn(`[Attachment] Could not read ${doc.name}: ${e}`)
+            }
+        }
+
+        const content = replaceMacrosInternal(
+            `${timestamp}${name}${swipe.swipe}${docBlock}`,
+            instruct
+        )
 
         let attachments: ContentTypes[] | undefined
 
