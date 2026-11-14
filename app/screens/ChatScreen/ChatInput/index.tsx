@@ -1,11 +1,12 @@
 import MaterialIcons from '@react-native-vector-icons/material-icons/static'
 import { randomUUID } from 'expo-crypto'
 import { Image } from 'expo-image'
+import { getDocumentAsync } from 'expo-document-picker'
 import { launchImageLibraryAsync, requestMediaLibraryPermissionsAsync } from 'expo-image-picker'
 import { router } from 'expo-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Keyboard, Pressable, TextInput, TouchableOpacity, View } from 'react-native'
+import { Keyboard, Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useMMKVBoolean } from 'react-native-mmkv'
 import Animated, {
     BounceIn,
@@ -161,6 +162,42 @@ const ChatInput = () => {
         return setAttachments([...attachments, ...newAttachments])
     }
 
+    const handlePickFile = async () => {
+        const result = await getDocumentAsync({
+            multiple: true,
+            copyToCacheDirectory: true,
+            type: [
+                'text/plain',
+                'text/html',
+                'text/css',
+                'text/javascript',
+                'text/typescript',
+                'text/x-python',
+                'text/x-sh',
+                'text/x-shellscript',
+                'text/x-bat',
+                'text/markdown',
+                'text/csv',
+                'text/xml',
+                'application/json',
+                'application/xml',
+                'application/javascript',
+                'application/x-sh',
+            ],
+        })
+        if (result.canceled) return
+
+        const newAttachments = result.assets
+            .filter((item) => !attachments.some((a) => a.name === item.name))
+            .map((item) => ({
+                uri: item.uri,
+                type: 'document' as const,
+                name: item.name,
+            }))
+
+        setAttachments([...attachments, ...newAttachments])
+    }
+
     return (
         <Pressable
             onPress={() => {
@@ -212,18 +249,42 @@ const ChatInput = () => {
                             entering={BounceIn}
                             exiting={ZoomOut.duration(100)}
                             style={{ alignItems: 'center', rowGap: 8 }}>
-                            <Pressable onPress={() => openImage(item.uri)}>
-                                <Image
-                                    source={{ uri: item.uri }}
+                            {item.type === 'document' ? (
+                                <View
                                     style={{
-                                        width: 128,
-                                        height: undefined,
-                                        aspectRatio: 1,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        columnGap: spacing.s,
+                                        paddingVertical: spacing.m,
+                                        paddingHorizontal: spacing.l,
+                                        backgroundColor: color.neutral._400,
                                         borderRadius: borderRadius.xl,
-                                    }}
-                                />
-                            </Pressable>
-
+                                        maxWidth: 160,
+                                    }}>
+                                    <MaterialIcons
+                                        name="file-text"
+                                        size={20}
+                                        color={color.text._300}
+                                    />
+                                    <Text
+                                        numberOfLines={2}
+                                        style={{ color: color.text._300, fontSize: 12 }}>
+                                        {item.name}
+                                    </Text>
+                                </View>
+                            ) : (
+                                <Pressable onPress={() => openImage(item.uri)}>
+                                    <Image
+                                        source={{ uri: item.uri }}
+                                        style={{
+                                            width: 128,
+                                            height: undefined,
+                                            aspectRatio: 1,
+                                            borderRadius: borderRadius.xl,
+                                        }}
+                                    />
+                                </Pressable>
+                            )}
                             <ThemedButton
                                 iconName="close"
                                 iconSize={20}
@@ -293,6 +354,14 @@ const ChatInput = () => {
                                         onPress: async (close) => {
                                             close()
                                             handlePickImage()
+                                        },
+                                    },
+                                    {
+                                        label: t('chat.input.actions.addFile'),
+                                        icon: 'file-text',
+                                        onPress: async (close) => {
+                                            close()
+                                            handlePickFile()
                                         },
                                     },
                                 ]}
