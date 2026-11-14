@@ -8,31 +8,18 @@ import { Characters } from '@lib/state/Characters'
 import { Chats } from '@lib/state/Chat'
 import { Theme } from '@lib/theme/ThemeManager'
 
-/** Umbral a partir del cual se muestra el botón de resumen (90%) */
-export const SUMMARY_THRESHOLD = 0.9
-
-/**
- * Hook compartido para calcular el progreso del contexto.
- * Lo usan tanto ChatTokenCount (barra) como ChatInput (botón de resumen).
- */
 export const useContextProgress = () => {
     const { id: chatId } = Chats.useChatState()
     const cardTokenCount = Characters.useCharacterStore(
         (state) => state.tokenCache?.description_length ?? 0
     )
     const { data } = useLiveQueryJoined(Chats.db.live.tokenCount(chatId ?? -1))
-    // Límite real según el modo: Max Context del modelo en local, sampler/API en remoto
     const maxLength = useContextLimit()
 
     const tokenCount = parseFloat(data?.[0]?.totalTokens ?? '0') + cardTokenCount
     const progress = Math.min(1, Math.max(0, tokenCount / maxLength))
 
-    return {
-        tokenCount,
-        maxLength,
-        progress,
-        nearLimit: progress >= SUMMARY_THRESHOLD,
-    }
+    return { tokenCount, maxLength, progress }
 }
 
 const ChatTokenCount: React.FC = () => {
