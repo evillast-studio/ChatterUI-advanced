@@ -672,8 +672,10 @@ export namespace Chats {
                 const name = uri.split('/').pop() ?? 'unknown'
                 const extension = name.split('.').pop()?.toLowerCase()
                 const mimeType = mime.getType(uri)
-                const type = mimeType?.split('/')?.[0]
-                if (!name || !extension || !mimeType || !type || !validExtensionTypes(type)) return
+                const mimePrefix = mimeType?.split('/')?.[0]
+                if (!name || !extension || !mimeType || !mimePrefix || !validExtensionTypes(mimePrefix)) return
+                // Map MIME prefix to DB enum value
+                const type = mimePrefix === 'text' ? 'document' : mimePrefix
                 const newURI = AppDirectory.Attachments + attachmentId + '.' + extension
                 copyFile({
                     from: uri,
@@ -682,7 +684,7 @@ export namespace Chats {
                 const [attachment] = await database
                     .insert(chatAttachments)
                     .values({
-                        type: type,
+                        type: type as 'audio' | 'image' | 'document',
                         name: name,
                         chat_entry_id: entryId,
                         uri: newURI,
@@ -779,8 +781,7 @@ export namespace Chats {
         return props
     }
 
-    const validExtensionTypes = (type: string) => {
-        //TODO: Add document, eg application/pdf or text/plain
-        return type === 'audio' || type === 'image'
+    const validExtensionTypes = (mimePrefix: string) => {
+        return mimePrefix === 'audio' || mimePrefix === 'image' || mimePrefix === 'text'
     }
 }
