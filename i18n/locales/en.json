@@ -259,6 +259,7 @@
     "input": {
       "actions": {
         "addImage": "Add Image",
+        "addFile": "Attach Text File",
         "authorNotes": "Author Notes",
         "chatHistory": "Chat History",
         "editCharacter": "Edit Character",
