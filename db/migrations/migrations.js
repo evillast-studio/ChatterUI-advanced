@@ -23,6 +23,8 @@ import m0018 from './0018_nice_loki.sql';
 import m0019 from './0019_youthful_captain_cross.sql';
 import m0020 from './0020_amusing_plazm.sql';
 import m0021 from './0021_productive_nebula.sql';
+import m0022 from './0022_last_audio_only.sql';
+import m0023 from './0023_max_images.sql';
 
   export default {
     journal,
@@ -48,7 +50,9 @@ m0017,
 m0018,
 m0019,
 m0020,
-m0021
+m0021,
+m0022,
+m0023
     }
   }
   
