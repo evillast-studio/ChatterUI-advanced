@@ -11,6 +11,7 @@ import { useShallow } from 'zustand/react/shallow'
 import ThemedButton from '@components/buttons/ThemedButton'
 import DropdownSheet from '@components/input/DropdownSheet'
 import StringArrayEditor from '@components/input/StringArrayEditor'
+import HorizontalSelector from '@components/input/HorizontalSelector'
 import ThemedCheckbox from '@components/input/ThemedCheckbox'
 import ThemedSwitch from '@components/input/ThemedSwitch'
 import ThemedTextInput from '@components/input/ThemedTextInput'
@@ -60,7 +61,7 @@ const attachmentKeys: KeysOfType<InstructType, boolean>[] = [
     'send_images',
     'send_audio',
     'send_documents',
-    'last_image_only',
+    'last_audio_only',
 ]
 
 const FormattingManager = () => {
@@ -416,6 +417,27 @@ const FormattingManager = () => {
                             />
                         )
                     }}
+                />
+                <HorizontalSelector
+                    label={t('formatting.sections.maxImages')}
+                    description={t('formatting.sections.maxImagesDesc')}
+                    values={[
+                        { label: '1', value: 1 },
+                        { label: '2', value: 2 },
+                        { label: '3', value: 3 },
+                        { label: '4', value: 4 },
+                        { label: '5', value: 5 },
+                        { label: '6', value: 6 },
+                        { label: '7', value: 7 },
+                        { label: '8', value: 8 },
+                        { label: '9', value: 9 },
+                        { label: '10', value: 10 },
+                        { label: '∞', value: 0 },
+                    ]}
+                    selected={currentInstruct.max_images ?? 1}
+                    onPress={(value) =>
+                        setCurrentInstruct({ ...currentInstruct, max_images: value })
+                    }
                 />
 
                 <View style={{ rowGap: 8 }}>
