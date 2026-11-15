@@ -275,7 +275,8 @@ export const instructs = sqliteTable('instructs', {
     send_images: integer('send_images', { mode: 'boolean' }).notNull().default(true),
     send_audio: integer('send_audio', { mode: 'boolean' }).notNull().default(true),
     send_documents: integer('send_documents', { mode: 'boolean' }).notNull().default(true),
-    last_image_only: integer('last_image_only', { mode: 'boolean' }).notNull().default(true),
+    max_images: integer('max_images').notNull().default(1),
+    last_audio_only: integer('last_audio_only', { mode: 'boolean' }).notNull().default(true),
 
     // additions 21/7/2025 v7
     system_prompt_format: text('system_prompt_format').notNull().default(defaultSystemPrompt),
