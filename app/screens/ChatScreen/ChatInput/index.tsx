@@ -21,6 +21,7 @@ import { useShallow } from 'zustand/react/shallow'
 import ThemedButton from '@components/buttons/ThemedButton'
 import Alert from '@components/views/Alert'
 import { useBottomSheetRef } from '@components/views/BottomSheet'
+import AudioSheet from '@components/views/AudioSheet'
 import CameraSheet from '@components/views/CameraSheet'
 import ContextMenu from '@components/views/ContextMenu'
 import { XAxisOnlyTransition } from '@lib/animations/transitions'
@@ -66,6 +67,7 @@ const ChatInput = () => {
     const [attachments, setAttachments] = useState<Attachment[]>([])
     const [hideOptions, setHideOptions] = useState(false)
     const cameraSheetRef = useBottomSheetRef()
+    const audioSheetRef = useBottomSheetRef()
     const { nowGenerating, abortFunction } = useInference(
         useShallow((state) => ({
             nowGenerating: state.nowGenerating,
@@ -198,6 +200,21 @@ const ChatInput = () => {
         setAttachments([...attachments, ...newAttachments])
     }
 
+    const handlePickAudio = async () => {
+        const result = await getDocumentAsync({
+            multiple: false,
+            copyToCacheDirectory: true,
+            type: ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp3'],
+        })
+        if (result.canceled || result.assets.length === 0) return
+        const item = result.assets[0]
+        if (attachments.some((a) => a.name === item.name)) return
+        setAttachments([
+            ...attachments,
+            { uri: item.uri, type: 'audio', name: item.name },
+        ])
+    }
+
     return (
         <Pressable
             onPress={() => {
@@ -249,7 +266,30 @@ const ChatInput = () => {
                             entering={BounceIn}
                             exiting={ZoomOut.duration(100)}
                             style={{ alignItems: 'center', rowGap: 8 }}>
-                            {item.type === 'document' ? (
+                            {item.type === 'audio' ? (
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        columnGap: spacing.s,
+                                        paddingVertical: spacing.m,
+                                        paddingHorizontal: spacing.l,
+                                        backgroundColor: color.neutral._400,
+                                        borderRadius: borderRadius.xl,
+                                        maxWidth: 160,
+                                    }}>
+                                    <MaterialIcons
+                                        name="mic"
+                                        size={20}
+                                        color={color.text._300}
+                                    />
+                                    <Text
+                                        numberOfLines={2}
+                                        style={{ color: color.text._300, fontSize: 12 }}>
+                                        {item.name}
+                                    </Text>
+                                </View>
+                            ) : item.type === 'document' ? (
                                 <View
                                     style={{
                                         flexDirection: 'row',
@@ -303,6 +343,19 @@ const ChatInput = () => {
                             />
                         </Animated.View>
                     )
+                }}
+            />
+            <AudioSheet
+                ref={audioSheetRef}
+                onRecorded={(uri) => {
+                    setAttachments((prev) => [
+                        ...prev,
+                        {
+                            uri,
+                            type: 'audio',
+                            name: `recording_${Date.now()}.m4a`,
+                        },
+                    ])
                 }}
             />
             <CameraSheet
@@ -362,6 +415,22 @@ const ChatInput = () => {
                                         onPress: async (close) => {
                                             close()
                                             handlePickFile()
+                                        },
+                                    },
+                                    {
+                                        label: t('chat.input.actions.recordAudio'),
+                                        icon: 'mic',
+                                        onPress: (close) => {
+                                            close()
+                                            audioSheetRef.current?.open()
+                                        },
+                                    },
+                                    {
+                                        label: t('chat.input.actions.addAudio'),
+                                        icon: 'music-note',
+                                        onPress: async (close) => {
+                                            close()
+                                            handlePickAudio()
                                         },
                                     },
                                 ]}
