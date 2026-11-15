@@ -32,7 +32,8 @@ const defaultGenerics = {
     send_images: true,
     send_audio: true,
     send_documents: true,
-    last_image_only: true,
+    max_images: 1,
+    last_audio_only: true,
     system_prompt_format: defaultSystemPromptFormat,
 }
 
@@ -366,7 +367,8 @@ export namespace Instructs {
                         persistedState.data.send_images = true
                         persistedState.data.send_audio = true
                         persistedState.data.send_documents = true
-                        persistedState.data.last_image_only = true
+                        persistedState.data.max_images = 1
+                        persistedState.data.last_audio_only = true
                     }
 
                     if (version === 6) {
