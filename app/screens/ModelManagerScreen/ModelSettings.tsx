@@ -355,46 +355,40 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
                         disabled={disabled}
                     />
 
-                    {/* Selector de backend GPU — muestra todos los disponibles */}
-                    {devices.length > 0 && (
-                        <>
-                            <HorizontalSelector
-                                style={{ paddingBottom: 8 }}
-                                label="Backend GPU"
-                                values={[
-                                    { label: 'Auto', value: '' },
-                                    ...devices
-                                        .filter((d) => d !== 'CPU')
-                                        .map((item) => ({
-                                            label: deviceLabels[item] ?? item,
-                                            value: item,
-                                        })),
-                                ]}
-                                selected={
-                                    config.devices?.find((d) => d !== 'CPU') ?? ''
+                    {/* Selector de backend GPU — siempre visible; detectados aparecen abajo */}
+                    <>
+                        <HorizontalSelector
+                            style={{ paddingBottom: 8 }}
+                            label="Backend GPU"
+                            values={[
+                                { label: 'Auto', value: '' },
+                                { label: 'Vulkan', value: 'Vulkan' },
+                                { label: 'OpenCL', value: 'GPUOpenCL' },
+                                { label: 'Hexagon', value: 'HTP0' },
+                            ]}
+                            selected={config.devices?.find((d) => d !== 'CPU') ?? ''}
+                            onPress={(value) => {
+                                if (value === '') {
+                                    setConfig({ ...config, devices: [] })
+                                } else {
+                                    setConfig({
+                                        ...config,
+                                        devices: config.no_kv_offload ? [value, 'CPU'] : [value],
+                                    })
                                 }
-                                onPress={(value) => {
-                                    if (value === '') {
-                                        setConfig({ ...config, devices: [] })
-                                    } else {
-                                        // GPU seleccionada + CPU para KV cache (híbrido)
-                                        setConfig({
-                                            ...config,
-                                            devices: config.no_kv_offload ? [value, 'CPU'] : [value],
-                                        })
-                                    }
-                                }}
-                            />
-                            <Text style={{
-                                color: color.text._500,
-                                fontSize: fontSize.s,
-                                marginLeft: 4,
-                                marginBottom: 8,
-                            }}>
-                                {devices.filter(d => d !== 'CPU').join(' · ') || 'Sin GPU detectada'}
-                            </Text>
-                        </>
-                    )}
+                            }}
+                        />
+                        <Text style={{
+                            color: color.text._500,
+                            fontSize: fontSize.s,
+                            marginLeft: 4,
+                            marginBottom: 8,
+                        }}>
+                            {devices.filter(d => d !== 'CPU').length > 0
+                                ? `Detected: ${devices.filter(d => d !== 'CPU').map(d => deviceLabels[d] ?? d).join(' · ')}`
+                                : 'Sin GPU detectada automáticamente'}
+                        </Text>
+                    </>
 
                     {/* Modo híbrido: GPU matmul + CPU KV cache */}
                     <ThemedSwitch
