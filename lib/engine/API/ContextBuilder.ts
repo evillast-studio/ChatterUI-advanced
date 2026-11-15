@@ -119,7 +119,7 @@ export const collectContext = async (params: ContextBuilderParams & { mode: 'cha
 
     let totalLength = systemPromptLength + reservedBudget
 
-    let hasImage = false
+    let imagesSent = 0
     let completionState: CompletionState = 'initial_completed'
 
     const contextMessages: ContextMessage[] = []
@@ -192,10 +192,10 @@ export const collectContext = async (params: ContextBuilderParams & { mode: 'cha
                 message,
                 apiConfig.request.completionType,
                 instruct,
-                hasImage
+                imagesSent
             )
 
-            hasImage = result.hasImageNew
+            imagesSent = result.imagesSent
 
             if (result.attachments.length > 0) {
                 attachments = await Promise.all(
@@ -474,28 +474,39 @@ const getValidAttachments = (
         supportsImages?: boolean
     },
     instruct: InstructType,
-    hasImage: boolean
+    imagesSentSoFar: number
 ) => {
-    // hasImage is used for last_image_only checking
-    let hasImageNew = hasImage
-    const audioAttachments = entry.attachments.filter(
-        (item) => item.type === 'audio' && instruct.send_audio && config.supportsAudio
-    )
+    let imagesSent = imagesSentSoFar
+    let hasAudioNew = false
+    let audioAttachments: typeof entry.attachments = []
+    if (instruct.send_audio && config.supportsAudio) {
+        const audios = entry.attachments.filter((item) => item.type === 'audio')
+        if (instruct.last_audio_only && audios.length > 0) {
+            if (!hasAudioNew) {
+                hasAudioNew = true
+                audioAttachments = [audios[0]]
+            }
+        } else {
+            audioAttachments = audios
+        }
+    }
 
     let imageAttachments: typeof entry.attachments = []
     if (instruct.send_images && config.supportsImages) {
         const images = entry.attachments.filter((item) => item.type === 'image')
-        if (instruct.last_image_only && images.length > 0) {
-            if (!hasImageNew) {
-                hasImageNew = true
-                imageAttachments = [images[0]]
-            }
-        } else {
+        const limit = instruct.max_images ?? 1
+        if (limit === 0) {
+            // 0 = unlimited
             imageAttachments = images
+            imagesSent += images.length
+        } else if (images.length > 0 && imagesSent < limit) {
+            const toTake = limit - imagesSent
+            imageAttachments = images.slice(0, toTake)
+            imagesSent += imageAttachments.length
         }
     }
     const attachments = [...audioAttachments, ...imageAttachments]
-    return { hasImageNew, attachments }
+    return { imagesSent, attachments }
 }
 
 export const getSystemPrompt = ({
