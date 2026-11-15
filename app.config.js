@@ -34,6 +34,7 @@ module.exports = {
                 'android.permission.FOREGROUND_SERVICE',
                 'android.permission.WAKE_LOCK',
                 'android.permission.FOREGROUND_SERVICE_DATA_SYNC',
+                'android.permission.RECORD_AUDIO',
             ],
         },
         web: {
@@ -101,6 +102,12 @@ module.exports = {
                             cropToolbarColor: '#000000',
                         },
                     },
+                },
+            ],
+            [
+                'expo-av',
+                {
+                    microphonePermission: 'Allow ChatterUI to record audio for voice messages',
                 },
             ],
             'expo-localization',
