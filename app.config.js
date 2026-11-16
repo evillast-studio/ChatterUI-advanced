@@ -105,7 +105,7 @@ module.exports = {
                 },
             ],
             [
-                'expo-av',
+                'expo-audio',
                 {
                     microphonePermission: 'Allow ChatterUI to record audio for voice messages',
                 },
