@@ -1,5 +1,5 @@
-import { Audio } from 'expo-av'
-import { useRef, useState } from 'react'
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio'
+import { useEffect } from 'react'
 import { Dimensions, Pressable, Text, View } from 'react-native'
 import MaterialIcons from '@react-native-vector-icons/material-icons/static'
 
@@ -15,35 +15,30 @@ type ChatAttachmentsProps = {
 
 const AudioChip: React.FC<{ uri: string; name: string }> = ({ uri, name }) => {
     const { borderRadius, color, fontSize, spacing } = Theme.useTheme()
-    const soundRef = useRef<Audio.Sound | null>(null)
-    const [playing, setPlaying] = useState(false)
+    const player = useAudioPlayer({ uri })
+    const status = useAudioPlayerStatus(player)
+    const playing = status.playing
 
-    const handlePress = async () => {
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            try { player.remove() } catch {}
+        }
+    }, [player])
+
+    const handlePress = () => {
         try {
             if (playing) {
-                await soundRef.current?.stopAsync()
-                await soundRef.current?.unloadAsync()
-                soundRef.current = null
-                setPlaying(false)
-                return
-            }
-            const { sound } = await Audio.Sound.createAsync(
-                { uri },
-                { shouldPlay: true },
-                (status) => {
-                    if (!status.isLoaded) return
-                    if (status.didJustFinish) {
-                        sound.unloadAsync()
-                        soundRef.current = null
-                        setPlaying(false)
-                    }
+                player.pause()
+            } else {
+                // Reset to start if finished
+                if (status.currentTime >= status.duration && status.duration > 0) {
+                    player.seekTo(0)
                 }
-            )
-            soundRef.current = sound
-            setPlaying(true)
+                player.play()
+            }
         } catch (e) {
             Logger.error('[AudioChip] ' + e)
-            setPlaying(false)
         }
     }
 
