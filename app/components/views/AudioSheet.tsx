@@ -1,4 +1,4 @@
-import { Audio } from 'expo-av'
+import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio'
 import { useEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
 
@@ -13,32 +13,30 @@ interface AudioSheetProps {
     onRecorded: (uri: string) => void
 }
 
-const formatTime = (ms: number) => {
-    const s = Math.floor(ms / 1000)
+const formatTime = (s: number) => {
     const m = Math.floor(s / 60)
     return `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
 const AudioSheet: React.FC<AudioSheetProps> = ({ ref, onRecorded }) => {
     const { color, borderRadius, fontSize, spacing } = Theme.useTheme()
-    const [recording, setRecording] = useState<Audio.Recording | null>(null)
+    const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY)
+    const [recording, setRecording] = useState(false)
     const [elapsed, setElapsed] = useState(0)
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
     const startRecording = async () => {
         try {
-            const { granted } = await Audio.requestPermissionsAsync()
-            if (!granted) {
+            const status = await AudioModule.requestRecordingPermissionsAsync()
+            if (!status.granted) {
                 Logger.warnToast('Microphone permission denied')
                 return
             }
-            await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true })
-            const { recording: rec } = await Audio.Recording.createAsync(
-                Audio.RecordingOptionsPresets.HIGH_QUALITY
-            )
-            setRecording(rec)
+            await recorder.prepareToRecordAsync()
+            recorder.record()
+            setRecording(true)
             setElapsed(0)
-            timerRef.current = setInterval(() => setElapsed((e) => e + 1000), 1000)
+            timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000)
         } catch (e) {
             Logger.error('[AudioSheet] ' + e)
         }
@@ -47,10 +45,10 @@ const AudioSheet: React.FC<AudioSheetProps> = ({ ref, onRecorded }) => {
     const stopRecording = async () => {
         if (!recording) return
         clearInterval(timerRef.current!)
-        await recording.stopAndUnloadAsync()
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false })
-        const uri = recording.getURI()
-        setRecording(null)
+        timerRef.current = null
+        await recorder.stop()
+        const uri = recorder.uri
+        setRecording(false)
         setElapsed(0)
         if (uri) {
             onRecorded(uri)
