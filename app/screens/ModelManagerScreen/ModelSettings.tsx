@@ -90,7 +90,9 @@ const ModelSettings: React.FC<ModelSettingsProp> = ({ modelImporting, modelLoadi
     const [renameValue, setRenameValue] = useState('')
 
     useEffect(() => {
-        KV.getKVSize().then(setKVSize)
+        let cancelled = false
+        KV.getKVSize().then((size) => { if (!cancelled) setKVSize(size) })
+        return () => { cancelled = true }
     }, [])
 
     const getKVSize = async () => {
