@@ -55,7 +55,8 @@ const ChatTextLast: React.FC<ChatTextProps> = ({ nowGenerating, swipe }) => {
 
     useEffect(() => {
         if (!nowGenerating && !firstRender.current) {
-            setTimeout(() => updateHeight(), 400)
+            const t = setTimeout(() => updateHeight(), 400)
+            return () => clearTimeout(t)
         }
     }, [nowGenerating, updateHeight])
 

@@ -1,5 +1,5 @@
 import { ImageBackground } from 'expo-image'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FlatList } from 'react-native'
 import { useMMKVBoolean } from 'react-native-mmkv'
 import { useShallow } from 'zustand/react/shallow'
@@ -50,6 +50,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, scrollData }) => {
 
     const { cause: scrollCause, index: scrollIndex } = scrollData ?? {}
     const flatlistRef = useRef<FlatList | null>(null)
+
+    const flatlistData = useMemo(
+        () =>
+            entryIdList.map((item, index) => ({
+                index: entryIdList.length - index - 1,
+                entryId: item.id,
+                isGreeting: index === entryIdList.length - 1,
+                isLastMessage: index === 0,
+            })),
+        [entryIdList]
+    )
     const { showSettings, showChat } = Drawer.useDrawerStore(
         useShallow((state) => ({
             showSettings: state.values?.[Drawer.ID.SETTINGS],
@@ -110,12 +121,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, scrollData }) => {
                 }
                 keyboardShouldPersistTaps="handled"
                 inverted
-                data={entryIdList.map((item, index) => ({
-                    index: entryIdList.length - index - 1,
-                    entryId: item.id,
-                    isGreeting: index === entryIdList.length - 1,
-                    isLastMessage: index === 0,
-                }))}
+                data={flatlistData}
                 keyExtractor={(item) => item.entryId.toString()}
                 renderItem={() => <></>}
                 scrollEventThrottle={16}
