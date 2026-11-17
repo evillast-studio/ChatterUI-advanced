@@ -50,7 +50,11 @@ const TTSManagerScreen = () => {
         Speech.getAvailableVoicesAsync().then((list) => setModelList(list))
     }
     useEffect(() => {
-        getVoices()
+        let cancelled = false
+        Speech.getAvailableVoicesAsync().then((list) => {
+            if (!cancelled) setModelList(list)
+        })
+        return () => { cancelled = true }
     }, [])
 
     return (
