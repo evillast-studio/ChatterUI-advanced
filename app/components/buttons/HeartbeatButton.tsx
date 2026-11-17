@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Text, View } from 'react-native'
 
@@ -52,25 +52,30 @@ const HeartbeatButton: React.FC<HeartbeatButtonProps> = ({
         }
     }, [status, messageNeutral, propMessageError, propMessageOK, t])
 
+    const cancelledRef = useRef(false)
+    useEffect(() => {
+        cancelledRef.current = false
+        return () => { cancelledRef.current = true }
+    }, [])
+
     const handleCheck = useCallback(
         async (api: string) => {
             const endpoint = apiFormat(api)
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 1000)
             try {
-                const controller = new AbortController()
-                const timeout = setTimeout(() => {
-                    controller.abort()
-                }, 1000)
                 const response = await fetch(endpoint, {
                     method: 'GET',
                     signal: controller.signal,
                     headers: headers ?? {},
                 }).catch(() => ({ status: 400 }))
                 clearTimeout(timeout)
+                if (cancelledRef.current) return
                 if (callback) callback()
-
                 setStatus(response.status === 200 ? ResponseStatus.OK : ResponseStatus.ERROR)
             } catch {
-                setStatus(ResponseStatus.ERROR)
+                clearTimeout(timeout)
+                if (!cancelledRef.current) setStatus(ResponseStatus.ERROR)
             }
         },
         [apiFormat, callback, headers]
