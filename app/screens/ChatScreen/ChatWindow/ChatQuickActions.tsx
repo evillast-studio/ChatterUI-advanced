@@ -1,5 +1,5 @@
 import { setStringAsync } from 'expo-clipboard'
-import React, { useCallback } from 'react'
+import React, { memo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 import { useMMKVBoolean } from 'react-native-mmkv'
@@ -273,4 +273,4 @@ const ChatQuickActions: React.FC<ChatActionProps> = ({
     )
 }
 
-export default ChatQuickActions
+export default memo(ChatQuickActions)

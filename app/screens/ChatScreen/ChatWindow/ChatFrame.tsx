@@ -1,6 +1,6 @@
-import { ReactNode } from 'react'
+import { memo, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Text, TouchableOpacity, View } from 'react-native'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useMMKVBoolean } from 'react-native-mmkv'
 
 import Avatar from '@components/views/Avatar'
@@ -30,17 +30,19 @@ const ChatFrame: React.FC<ChatFrameProps> = ({ children, index, nowGenerating, i
     const swipe = entry.swipes[0]
     if (!swipe) return
 
-    const getDeltaTime = () =>
-        Math.round(
-            Math.max(
-                0,
-                // eslint-disable-next-line react-hooks/purity
-                ((nowGenerating && isLast ? Date.now() : swipe.gen_finished.getTime()) -
-                    swipe.gen_started.getTime()) /
-                    1000
-            )
-        )
-    const deltaTime = getDeltaTime()
+    const deltaTime = useMemo(
+        () =>
+            Math.round(
+                Math.max(
+                    0,
+                    ((nowGenerating && isLast ? Date.now() : swipe.gen_finished.getTime()) -
+                        swipe.gen_started.getTime()) /
+                        1000
+                )
+            ),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [nowGenerating, isLast, swipe.gen_finished, swipe.gen_started]
+    )
 
     const rowDir = entry.is_user && alternate ? 'row-reverse' : 'row'
     const align = entry.is_user && alternate ? 'flex-end' : 'flex-start'
@@ -154,4 +156,26 @@ const ChatFrame: React.FC<ChatFrameProps> = ({ children, index, nowGenerating, i
     )
 }
 
-export default ChatFrame
+export default memo(ChatFrame)
+
+const styles = StyleSheet.create({
+    wideContainer: {
+        flex: 1,
+        paddingHorizontal: 8,
+        paddingVertical: 8,
+        borderRadius: 16,
+    },
+    avatarStandard: {
+        width: 48,
+        height: 48,
+        marginHorizontal: 4,
+    },
+    standardContainer: {
+        alignItems: 'center',
+    },
+    standardInner: {
+        rowGap: 8,
+        alignItems: 'center' as const,
+    },
+    flex1: { flex: 1 },
+})

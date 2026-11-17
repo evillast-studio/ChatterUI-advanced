@@ -64,7 +64,7 @@ const ChatTextLast: React.FC<ChatTextProps> = ({ nowGenerating, swipe }) => {
     const renderedText = showHidden ? swipe.swipe : filteredText.result
 
     return (
-        <Animated.View style={{ overflow: 'scroll', height: animHeight }}>
+        <Animated.View style={{ overflow: 'hidden', height: animHeight }}>
             <View style={{ minHeight: 10 }} ref={viewRef} onLayout={updateHeight}>
                 {swipe.id === currentSwipeId && nowGenerating && buffer.data === '' && (
                     <AnimatedEllipsis />

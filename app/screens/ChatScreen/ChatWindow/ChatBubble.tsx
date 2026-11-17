@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pressable, Text, View } from 'react-native'
 import { useMMKVBoolean } from 'react-native-mmkv'
@@ -51,7 +52,7 @@ const ChatBubble: React.FC<ChatTextProps> = ({
 
     const showSwipe = !entry.is_user && isLastMessage
     const timings = swipe.timings
-    const bubbleColor = entry.is_user ? color.neutral._200 : color.neutral._200
+    const bubbleColor = entry.is_user ? color.neutral._300 : color.neutral._200
     return (
         <View>
             <Pressable
@@ -129,4 +130,4 @@ const getFiniteValue = (value: number | null) => {
     return value.toFixed(2)
 }
 
-export default ChatBubble
+export default memo(ChatBubble)
