@@ -1,4 +1,4 @@
-import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio'
+import { useAudioRecorder, useAudioRecorderState, AudioModule, RecordingPresets } from 'expo-audio'
 import { useEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
 
@@ -21,7 +21,8 @@ const formatTime = (s: number) => {
 const AudioSheet: React.FC<AudioSheetProps> = ({ ref, onRecorded }) => {
     const { color, borderRadius, fontSize, spacing } = Theme.useTheme()
     const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY)
-    const [recording, setRecording] = useState(false)
+    const recorderState = useAudioRecorderState(recorder)
+    const recording = recorderState.isRecording
     const [elapsed, setElapsed] = useState(0)
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -34,7 +35,6 @@ const AudioSheet: React.FC<AudioSheetProps> = ({ ref, onRecorded }) => {
             }
             await recorder.prepareToRecordAsync()
             recorder.record()
-            setRecording(true)
             setElapsed(0)
             timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000)
         } catch (e) {
@@ -48,7 +48,6 @@ const AudioSheet: React.FC<AudioSheetProps> = ({ ref, onRecorded }) => {
         timerRef.current = null
         await recorder.stop()
         const uri = recorder.uri
-        setRecording(false)
         setElapsed(0)
         if (uri) {
             onRecorded(uri)
