@@ -32,22 +32,21 @@ export async function registerForPushNotificationsAsync() {
         })
     }
 
-    // @TODO: Figure this out
-    // const permissions = await Notifications.getPermissionsAsync()
-    let finalStatus = 'granted'
+    const permissions = await Notifications.getPermissionsAsync()
+    let finalStatus = permissions.status
+    if (finalStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync()
+        finalStatus = status
+    }
     if (finalStatus !== 'granted') {
         Alert.alert({
             title: 'Permission Required',
             description: 'ChatterUI requires permissions to send you notifications.',
             buttons: [
-                {
-                    label: 'Cancel',
-                },
+                { label: 'Cancel' },
                 {
                     label: 'Open Permissions',
-                    onPress: () => {
-                        Linking.openSettings()
-                    },
+                    onPress: () => Linking.openSettings(),
                 },
             ],
         })
