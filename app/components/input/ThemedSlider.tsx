@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 
 import { Theme } from '@lib/theme/ThemeManager'
@@ -39,7 +39,11 @@ const ThemedSlider: React.FC<ThemedSliderProps> = ({
               : 0
     const styles = useStyles()
     const { color } = Theme.useTheme()
-    const [textValue, setTextValue] = useState(value.toString())
+    const [textValue, setTextValue] = useState(value.toFixed(resolvedPrecision))
+    // Sync text when value changes externally (e.g. loading a profile)
+    useEffect(() => {
+        setTextValue(value.toFixed(resolvedPrecision))
+    }, [value, resolvedPrecision])
 
     const clampSlider = useCallback(
         (value: number) => clamp(value, min, max, resolvedPrecision),
@@ -47,21 +51,21 @@ const ThemedSlider: React.FC<ThemedSliderProps> = ({
     )
 
     const handleSliderChange = (v: number) => {
-        if (!isNaN(clampSlider(v))) onValueChange(clampSlider(v))
-        setTextValue(clampSlider(v).toString())
+        const clamped = clampSlider(v)
+        if (!isNaN(clamped)) onValueChange(clamped)
+        setTextValue(clamped.toFixed(resolvedPrecision))
     }
 
+    // Only update display while typing, don't fire onValueChange mid-input
     const handleTextInputChange = (t: string) => {
-        let v = 0
         setTextValue(t)
-        v = parseFloat(t)
-        if (!isNaN(v)) onValueChange(clampSlider(v))
     }
 
     const handleEndEdit = () => {
         const v = parseFloat(textValue)
-        if (!isNaN(v)) onValueChange(clamp(v, min, max, resolvedPrecision))
-        setTextValue(clampSlider(value).toString())
+        const clamped = isNaN(v) ? clampSlider(value) : clamp(v, min, max, resolvedPrecision)
+        onValueChange(clamped)
+        setTextValue(clamped.toFixed(resolvedPrecision))
     }
 
     return (
