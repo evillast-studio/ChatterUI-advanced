@@ -1,8 +1,8 @@
 import { useAudioRecorder, useAudioRecorderState, AudioModule, RecordingPresets } from 'expo-audio'
 import { useEffect, useRef, useState } from 'react'
-import { Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
+import MaterialIcons from '@react-native-vector-icons/material-icons/static'
 
-import ThemedButton from '@components/buttons/ThemedButton'
 import { Logger } from '@lib/state/Logger'
 import { Theme } from '@lib/theme/ThemeManager'
 
@@ -74,7 +74,8 @@ const AudioSheet: React.FC<AudioSheetProps> = ({ ref, onRecorded }) => {
                 }}>
                 {formatTime(elapsed)}
             </Text>
-            <View
+            <Pressable
+                onPress={recording ? stopRecording : startRecording}
                 style={{
                     width: 72,
                     height: 72,
@@ -83,14 +84,12 @@ const AudioSheet: React.FC<AudioSheetProps> = ({ ref, onRecorded }) => {
                     alignItems: 'center',
                     justifyContent: 'center',
                 }}>
-                <ThemedButton
-                    iconName={recording ? 'stop' : 'mic'}
-                    iconSize={32}
-                    variant="plain"
-                    buttonStyle={{ padding: spacing.m }}
-                    onPress={recording ? stopRecording : startRecording}
+                <MaterialIcons
+                    name={recording ? 'stop' : 'mic'}
+                    size={32}
+                    color={color.text._100}
                 />
-            </View>
+            </Pressable>
             <Text style={{ color: color.text._400, fontSize: fontSize.m }}>
                 {recording ? 'Recording… tap to stop' : 'Tap to start recording'}
             </Text>
