@@ -190,12 +190,15 @@ const ChatInput = () => {
         if (result.canceled) return
 
         const newAttachments = result.assets
-            .filter((item) => !attachments.some((a) => a.name === item.name))
             .map((item) => ({
                 uri: item.uri,
                 type: 'document' as const,
-                name: item.name,
+                name:
+                    item.name && !item.name.match(/^[0-9a-f-]{36}/)
+                        ? item.name
+                        : item.uri.split('/').pop()?.split('?')[0] ?? `file_${Date.now()}`,
             }))
+            .filter((item) => !attachments.some((a) => a.name === item.name))
 
         setAttachments([...attachments, ...newAttachments])
     }
@@ -208,11 +211,12 @@ const ChatInput = () => {
         })
         if (result.canceled || result.assets.length === 0) return
         const item = result.assets[0]
-        if (attachments.some((a) => a.name === item.name)) return
-        setAttachments([
-            ...attachments,
-            { uri: item.uri, type: 'audio', name: item.name },
-        ])
+        const name =
+            item.name && !item.name.match(/^[0-9a-f-]{36}/)
+                ? item.name
+                : item.uri.split('/').pop()?.split('?')[0] ?? `audio_${Date.now()}.mp3`
+        if (attachments.some((a) => a.name === name)) return
+        setAttachments([...attachments, { uri: item.uri, type: 'audio', name }])
     }
 
     return (
@@ -419,7 +423,7 @@ const ChatInput = () => {
                                     },
                                     {
                                         label: t('chat.input.actions.recordAudio'),
-                                        icon: 'customerservice',
+                                        icon: 'audio',
                                         onPress: (close) => {
                                             close()
                                             audioSheetRef.current?.open()
