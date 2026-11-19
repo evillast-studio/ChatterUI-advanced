@@ -230,6 +230,15 @@ export namespace Llama {
                         persistedState.profiles = {}
                         Logger.info('Migrated to v6 EngineData (profiles)')
                     }
+                    // Fix context_length stored as KB instead of tokens (e.g. 6 → 6144)
+                    if (
+                        persistedState.config?.context_length !== undefined &&
+                        persistedState.config.context_length < 128
+                    ) {
+                        persistedState.config.context_length =
+                            persistedState.config.context_length * 1024
+                        Logger.info('Fixed context_length unit (was in KB, now in tokens)')
+                    }
                     return persistedState
                 },
             }
