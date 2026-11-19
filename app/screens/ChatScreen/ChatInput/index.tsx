@@ -306,7 +306,7 @@ const ChatInput = () => {
                                         maxWidth: 160,
                                     }}>
                                     <MaterialIcons
-                                        name="file-text"
+                                        name="description"
                                         size={20}
                                         color={color.text._300}
                                     />
