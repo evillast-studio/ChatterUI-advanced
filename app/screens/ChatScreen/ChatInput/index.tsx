@@ -419,7 +419,7 @@ const ChatInput = () => {
                                     },
                                     {
                                         label: t('chat.input.actions.recordAudio'),
-                                        icon: 'mic',
+                                        icon: 'customerservice',
                                         onPress: (close) => {
                                             close()
                                             audioSheetRef.current?.open()
@@ -427,7 +427,7 @@ const ChatInput = () => {
                                     },
                                     {
                                         label: t('chat.input.actions.addAudio'),
-                                        icon: 'music-note',
+                                        icon: 'sound',
                                         onPress: async (close) => {
                                             close()
                                             handlePickAudio()
