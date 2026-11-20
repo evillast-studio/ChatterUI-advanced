@@ -89,7 +89,7 @@ const ThemedSlider: React.FC<ThemedSliderProps> = ({
                         style={[
                             styles.textBox,
                             {
-                                flex: value > 999999 ? 2 : 1.5,
+                                flex: value > 99999 ? 2.5 : value > 9999 ? 2 : value > 999 ? 1.8 : 1.5,
                                 borderColor: disabled ? color.neutral._700 : color.neutral._400,
                             },
                         ]}
