@@ -44,36 +44,29 @@ const ContextLimitPreview: React.FC<ContextLimitPreviewProps> = ({ generatedLeng
                 borderRadius={12}
                 width={null}
             />
-            <View style={{ flexDirection: 'row', columnGap: 4, alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                 {warning ? (
                     <AntDesign
                         name={'exclamation-circle'}
                         size={16}
-                        style={{
-                            color: color.error._400,
-                        }}
+                        style={{ color: color.error._400 }}
                     />
                 ) : (
                     <MaterialIcons
                         name="circle"
                         size={16}
-                        style={{
-                            color: color.primary._400,
-                        }}
+                        style={{ color: color.primary._400 }}
                     />
                 )}
-                <Text style={{ color: color.text._400, textAlign: 'center' }}>
+                <Text style={{ color: color.text._400, flexShrink: 1 }}>
                     {t('contextlimit.chat')}: {leftover}
                 </Text>
                 <MaterialIcons
                     name="circle"
                     size={16}
-                    style={{
-                        color: genLengthColor,
-                        marginLeft: 12,
-                    }}
+                    style={{ color: genLengthColor, marginLeft: 4 }}
                 />
-                <Text style={{ color: color.text._400, textAlign: 'center' }}>
+                <Text style={{ color: color.text._400, flexShrink: 1 }}>
                     {t('contextlimit.generated')}: {generatedLength}
                 </Text>
             </View>
