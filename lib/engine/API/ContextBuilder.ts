@@ -351,9 +351,27 @@ export const collectContext = async (params: ContextBuilderParams & { mode: 'cha
     Logger.info(`${(performance.now() - delta).toFixed(2)}ms`)
 
     if (contextMessages.length === 0) warnNoMessages()
+
+    // Merge consecutive same-role messages to satisfy Jinja templates that require
+    // strict user/assistant alternation (e.g. Gemma 3, Llama 3).
+    const reversed = contextMessages.reverse()
+    const merged: ContextMessage[] = []
+    for (const msg of reversed) {
+        const prev = merged[merged.length - 1]
+        if (prev && prev.role === msg.role) {
+            // Fuse content with a newline separator
+            prev.content = prev.content + '\n' + msg.content
+            if (msg.attachments?.length) {
+                prev.attachments = [...(prev.attachments ?? []), ...msg.attachments]
+            }
+        } else {
+            merged.push({ ...msg })
+        }
+    }
+
     return {
         systemPrompt: systemPrompt,
-        messages: contextMessages.reverse(),
+        messages: merged,
     }
 }
 
