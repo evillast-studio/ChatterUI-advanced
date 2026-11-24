@@ -1,5 +1,4 @@
 import AntDesign from '@react-native-vector-icons/ant-design/static'
-import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
 import React, { useCallback } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 
@@ -12,13 +11,13 @@ type SwipesProps = {
     nowGenerating: boolean
     isGreeting: boolean
     swipe: ChatSwipe
+    swipeIds: number[]
 }
 
-const ChatSwipes: React.FC<SwipesProps> = ({ nowGenerating, isGreeting, swipe }) => {
+const ChatSwipes: React.FC<SwipesProps> = ({ nowGenerating, isGreeting, swipe, swipeIds }) => {
     const styles = useStyles()
     const { color } = Theme.useTheme()
-    const { data: swipeIdListData } = useLiveQuery(Chats.db.live.swipeIdList(swipe.entry_id), [])
-    const swipeIdList = swipeIdListData.map((item) => item.id)
+    const swipeIdList = swipeIds
 
     const currentIndex = swipeIdList.indexOf(swipe.id)
 

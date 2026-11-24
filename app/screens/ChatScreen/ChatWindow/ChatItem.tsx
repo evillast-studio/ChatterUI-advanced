@@ -81,6 +81,7 @@ const ChatItemBody: React.FC<ChatItemBodyProps> = memo(({
                     index={index}
                     isLastMessage={isLastMessage}
                     isGreeting={isGreeting}
+                    swipeIds={entrySwipeIds}
                 />
             </ChatFrame>
         </Animated.View>

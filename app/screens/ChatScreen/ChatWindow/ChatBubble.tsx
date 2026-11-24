@@ -22,6 +22,7 @@ type ChatTextProps = {
     isLastMessage: boolean
     isGreeting: boolean
     entry: Chats.db.live.LiveEntry
+    swipeIds: number[]
 }
 
 const ChatBubble: React.FC<ChatTextProps> = ({
@@ -30,6 +31,7 @@ const ChatBubble: React.FC<ChatTextProps> = ({
     entry,
     isLastMessage,
     isGreeting,
+    swipeIds,
 }) => {
     const { t } = useTranslation()
     const { appMode } = useAppMode()
@@ -119,7 +121,7 @@ const ChatBubble: React.FC<ChatTextProps> = ({
                 </View>
             </Pressable>
             {showSwipe && (
-                <ChatSwipes swipe={swipe} nowGenerating={nowGenerating} isGreeting={isGreeting} />
+                <ChatSwipes swipe={swipe} swipeIds={swipeIds} nowGenerating={nowGenerating} isGreeting={isGreeting} />
             )}
         </View>
     )
