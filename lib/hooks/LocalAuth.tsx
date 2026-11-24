@@ -16,16 +16,22 @@ const useLocalAuth = () => {
     }, [])
 
     useEffect(() => {
+        let cancelled = false
         if (enabled && !success)
             authenticateAsync({
                 promptMessage: 'Authentication Required',
             }).then((result) => {
-                setSuccess(result.success)
+                if (!cancelled) setSuccess(result.success)
             })
+        return () => { cancelled = true }
     }, [retryCount, enabled, success])
 
     useEffect(() => {
-        getEnrolledLevelAsync().then((result) => sethasAuth(result !== SecurityLevel.NONE))
+        let cancelled = false
+        getEnrolledLevelAsync().then((result) => {
+            if (!cancelled) sethasAuth(result !== SecurityLevel.NONE)
+        })
+        return () => { cancelled = true }
     }, [])
 
     return { authorized, retry }
