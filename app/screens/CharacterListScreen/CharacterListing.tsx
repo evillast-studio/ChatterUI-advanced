@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { StyleSheet, Text, View } from 'react-native'
 import { useMMKVBoolean } from 'react-native-mmkv'
@@ -81,7 +82,7 @@ const CharacterListing: React.FC<CharacterListingProps> = ({
     )
 }
 
-export default CharacterListing
+export default memo(CharacterListing)
 
 const useStyles = () => {
     const { color, spacing, borderRadius, fontSize } = Theme.useTheme()
