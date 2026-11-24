@@ -50,15 +50,17 @@ const AvatarViewer: React.FC<AvatarViewerProps> = ({ editorButton = true }) => {
     const name = isUser ? userName : charName
 
     useEffect(() => {
+        let cancelled = false
         Image.getSize(
             Characters.getImageDir(imageId ?? -1),
             (width, height) => {
-                setAspectRatio(width / height)
+                if (!cancelled) setAspectRatio(width / height)
             },
             () => {
-                setAspectRatio(1)
+                if (!cancelled) setAspectRatio(1)
             }
         )
+        return () => { cancelled = true }
     }, [imageId])
 
     return (
