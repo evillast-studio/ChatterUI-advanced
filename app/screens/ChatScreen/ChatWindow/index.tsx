@@ -48,19 +48,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, scrollData }) => {
         },
     ])
 
+    // Track total entry count separately from the limited live list
+    const [totalEntryCount, setTotalEntryCount] = useState(0)
+    useEffect(() => {
+        let cancelled = false
+        Chats.db.live.entryCount(chatId)
+            .then((result) => {
+                if (!cancelled) setTotalEntryCount(result[0]?.total ?? entryIdList.length)
+            })
+            .catch(() => {
+                if (!cancelled) setTotalEntryCount(entryIdList.length)
+            })
+        return () => { cancelled = true }
+    }, [chatId, entryIdList.length])
+
     const { cause: scrollCause, index: scrollIndex } = scrollData ?? {}
     const flatlistRef = useRef<FlatList | null>(null)
-
-    const flatlistData = useMemo(
-        () =>
-            entryIdList.map((item, index) => ({
-                index: entryIdList.length - index - 1,
-                entryId: item.id,
-                isGreeting: index === entryIdList.length - 1,
-                isLastMessage: index === 0,
-            })),
-        [entryIdList]
-    )
     const { showSettings, showChat } = Drawer.useDrawerStore(
         useShallow((state) => ({
             showSettings: state.values?.[Drawer.ID.SETTINGS],
@@ -121,14 +124,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, scrollData }) => {
                 }
                 keyboardShouldPersistTaps="handled"
                 inverted
-                data={flatlistData}
+                data={entryIdList.map((item, index) => ({
+                    index: entryIdList.length - index - 1,
+                    entryId: item.id,
+                    isGreeting: index === entryIdList.length - 1,
+                    isLastMessage: index === 0,
+                }))}
                 keyExtractor={(item) => item.entryId.toString()}
                 renderItem={() => <></>}
                 scrollEventThrottle={16}
-                windowSize={3}
+                windowSize={5}
                 maxToRenderPerBatch={4}
-                updateCellsBatchingPeriod={50}
-                initialNumToRender={6}
+                initialNumToRender={8}
                 removeClippedSubviews={true}
                 onViewableItemsChanged={(item) => {
                     const index = item.viewableItems?.at(0)?.index
@@ -162,7 +169,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, scrollData }) => {
                     rowGap: 8,
                 }}
                 ListFooterComponent={
-                    updatedAt && (() => <ChatFooter chatLength={entryIdList.length} />)
+                    updatedAt && (() => <ChatFooter chatLength={totalEntryCount} />)
                 }
                 ListHeaderComponent={() => <ChatHeader />}
             />
