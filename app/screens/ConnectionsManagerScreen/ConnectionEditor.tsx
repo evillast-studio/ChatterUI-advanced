@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useShallow } from 'zustand/react/shallow'
@@ -47,6 +47,12 @@ const ConnectionEditor: React.FC<ConnectionEditorProps> = ({ index, ref, origina
         return getTemplates().find((item) => item.name === values.configName) ?? getTemplates()[0]
     }, [values.configName, getTemplates])
 
+    const cancelledRef = useRef(false)
+    useEffect(() => {
+        cancelledRef.current = false
+        return () => { cancelledRef.current = true }
+    }, [])
+
     const handleGetModelList = useCallback(
         async (values: APIValues) => {
             if (!template.features.useModel) return
@@ -58,13 +64,14 @@ const ConnectionEditor: React.FC<ConnectionEditorProps> = ({ index, ref, origina
                 }
             }
             const result = await fetch(values.modelEndpoint, { headers: { ...auth } })
+            if (cancelledRef.current) return
             if (result.status !== 200) {
                 Logger.error(t('connections.add.error.200', { error: `${result.status}` }))
                 return
             }
 
             const data = await result.json().catch(() => null)
-            if (!data) return
+            if (!data || cancelledRef.current) return
 
             const models = getNestedValue(data, template.model.modelListParser)
             setModelList(models)
