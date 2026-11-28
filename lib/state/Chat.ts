@@ -672,10 +672,8 @@ export namespace Chats {
                 const name = uri.split('/').pop() ?? 'unknown'
                 const extension = name.split('.').pop()?.toLowerCase()
                 const mimeType = mime.getType(uri)
-                const mimePrefix = mimeType?.split('/')?.[0]
-                if (!name || !extension || !mimeType || !mimePrefix || !validExtensionTypes(mimePrefix)) return
-                // Map MIME prefix to DB enum value
-                const type = mimePrefix === 'text' ? 'document' : mimePrefix
+                const type = mimeType?.split('/')?.[0]
+                if (!name || !extension || !mimeType || !type || !validExtensionTypes(type)) return
                 const newURI = AppDirectory.Attachments + attachmentId + '.' + extension
                 copyFile({
                     from: uri,
@@ -684,7 +682,7 @@ export namespace Chats {
                 const [attachment] = await database
                     .insert(chatAttachments)
                     .values({
-                        type: type as 'audio' | 'image' | 'document',
+                        type: type,
                         name: name,
                         chat_entry_id: entryId,
                         uri: newURI,
@@ -707,14 +705,20 @@ export namespace Chats {
         }
 
         export namespace live {
-            export const entryIdList = (chatId: number) => {
+            export const entryIdList = (chatId: number, limit = 200) => {
                 return database.query.chatEntries.findMany({
                     where: eq(chatEntries.chat_id, chatId),
-                    columns: {
-                        id: true,
-                    },
+                    columns: { id: true },
                     orderBy: desc(chatEntries.id),
+                    limit,
                 })
+            }
+
+            export const entryCount = (chatId: number) => {
+                return database
+                    .select({ total: count(chatEntries.id) })
+                    .from(chatEntries)
+                    .where(eq(chatEntries.chat_id, chatId))
             }
 
             export const entry = (entryId: number) => {
@@ -781,7 +785,8 @@ export namespace Chats {
         return props
     }
 
-    const validExtensionTypes = (mimePrefix: string) => {
-        return mimePrefix === 'audio' || mimePrefix === 'image' || mimePrefix === 'text'
+    const validExtensionTypes = (type: string) => {
+        //TODO: Add document, eg application/pdf or text/plain
+        return type === 'audio' || type === 'image'
     }
 }
