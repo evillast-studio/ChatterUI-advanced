@@ -179,7 +179,13 @@ const hordeResponse = (senderParams: SenderParams) => {
         let result
 
         do {
-            await new Promise((resolve) => setTimeout(resolve, 5000))
+            await new Promise<void>((resolve) => {
+                const t = setTimeout(resolve, 5000)
+                const check = setInterval(() => {
+                    if (aborted) { clearTimeout(t); clearInterval(check); resolve() }
+                }, 100)
+                setTimeout(() => clearInterval(check), 5000)
+            })
             if (aborted) return
 
             Logger.info(`Checking...`)
